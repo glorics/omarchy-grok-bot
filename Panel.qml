@@ -89,13 +89,6 @@ Panel {
     return version !== "" ? version : ""
   }
 
-  function sourceNote() {
-    if (!grok.installed) return "Install the unofficial Linux client, then this widget can launch it."
-    if (grok.source === "package" && grok.updateAvailable)
-      return "Omarchy's grok-bot package is older than the unofficial AppImage on GitHub."
-    return ""
-  }
-
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -229,7 +222,7 @@ Panel {
           }
 
           BorderSurface {
-            visible: grok.crashed || (!grok.installed)
+            visible: grok.crashed || !grok.installed || (grok.source === "package" && grok.updateAvailable)
             width: parent.width
             implicitHeight: statusText.implicitHeight + Style.spacing.xl * 2
             color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.10)
@@ -245,7 +238,9 @@ Panel {
               anchors.rightMargin: Style.space(12)
               text: grok.crashed
                 ? "The last session ended unexpectedly. Open Grok Bot to start a new one."
-                : "The unofficial Linux client is not installed on this machine."
+                : (!grok.installed
+                  ? "Install the unofficial Linux client, then this widget can launch it."
+                  : "Omarchy's grok-bot package is older than the unofficial AppImage on GitHub.")
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
@@ -268,16 +263,6 @@ Panel {
               value: grok.latestVersion + (grok.updateAvailable ? " · newer" : " · latest")
             }
             InfoPair { label: "Source"; value: grok.sourceLabel }
-          }
-
-          Text {
-            visible: !grok.installed || (grok.source === "package" && grok.updateAvailable)
-            width: parent.width
-            text: root.sourceNote()
-            color: root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            wrapMode: Text.WordWrap
           }
 
           PanelSeparator { foreground: root.foreground }
