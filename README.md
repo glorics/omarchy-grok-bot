@@ -11,9 +11,9 @@ GitHub. This widget is the place that fact belongs on Omarchy.
 
 Plugin id: `glorics.grok-bot`
 
-Want a jar of sand instead of the orb? That is
+Want the same orb in a sunset flavor (magenta, gold, powerline chips)? That is
 [glorics/omarchy-grok-sand](https://github.com/glorics/omarchy-grok-sand).
-Same panel, different face. Enable one:
+Enable one:
 
 ```bash
 omarchy plugin disable glorics.grok-bot
