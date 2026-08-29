@@ -93,7 +93,7 @@ Panel {
     if (!grok.installed) return "Install the unofficial Linux client, then this widget can launch it."
     if (grok.source === "package" && grok.updateAvailable)
       return "Omarchy's grok-bot package is older than the unofficial AppImage on GitHub."
-    return grok.sourceLabel
+    return ""
   }
 
   implicitWidth: button.implicitWidth
