@@ -271,7 +271,7 @@ Panel {
           }
 
           Text {
-            visible: text !== ""
+            visible: !grok.installed || (grok.source === "package" && grok.updateAvailable)
             width: parent.width
             text: root.sourceNote()
             color: root.dim
