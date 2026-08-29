@@ -11,15 +11,6 @@ GitHub. This widget is the place that fact belongs on Omarchy.
 
 Plugin id: `glorics.grok-bot`
 
-Want the same orb in a sunset flavor (magenta, gold, powerline chips)? That is
-[glorics/omarchy-grok-sand](https://github.com/glorics/omarchy-grok-sand).
-Enable one:
-
-```bash
-omarchy plugin disable glorics.grok-bot
-omarchy plugin add https://github.com/glorics/omarchy-grok-sand.git --enable
-```
-
 ## What it does
 
 - Bar icon for the unofficial Linux client — glossy orb, official-style eyes that glance around and blink while the box is running
