@@ -304,7 +304,9 @@ Panel {
     property string value: ""
 
     width: parent.width
-    implicitHeight: Math.max(labelText.implicitHeight, valueText.implicitHeight)
+    implicitHeight: Style.font.bodySmall + Style.space(4)
+    height: implicitHeight
+    clip: true
 
     Text {
       id: labelText
@@ -315,19 +317,18 @@ Panel {
       opacity: 0.6
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
+      wrapMode: Text.NoWrap
     }
     Text {
       id: valueText
       anchors.right: parent.right
-      anchors.left: labelText.right
-      anchors.leftMargin: Style.space(8)
       anchors.verticalCenter: parent.verticalCenter
       text: value
       color: root.foreground
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
-      horizontalAlignment: Text.AlignRight
-      elide: Text.ElideRight
+      wrapMode: Text.NoWrap
+      maximumLineCount: 1
     }
   }
 
