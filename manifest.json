@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "glorics.grok-bot",
+  "name": "Grok Bot",
+  "version": "1.0.0",
+  "author": "glorics",
+  "license": "MIT",
+  "description": "Launch, focus, and update the unofficial Grok Bot Linux client from the Omarchy bar.",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Grok Bot",
+    "description": "One bar icon: running state, GitHub updates, and launch-or-focus for the unofficial Linux AppImage.",
+    "category": "AI",
+    "aliases": ["grok-bot", "grokbot", "cockbot"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 15
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 5,
+        "max": 3600,
+        "step": 5,
+        "defaultValue": 15
+      }
+    ]
+  }
+}
