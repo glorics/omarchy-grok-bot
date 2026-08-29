@@ -13,7 +13,7 @@ Plugin id: `glorics.grok-bot`
 
 ## What it does
 
-- Bar icon for the unofficial Linux client — glossy orb, official-style eyes, blinks while the box is running
+- Bar icon for the unofficial Linux client — glossy orb, official-style eyes that glance around and blink while the box is running
 - Left click: panel · right click: launch or focus · middle click: check GitHub
 - Panel shows running / idle / crashed, installed version, and whether GitHub has a newer AppImage
 - **Update now** only appears for the unofficial AppImage (`~/.local/bin/grok-bot --update-only`)
