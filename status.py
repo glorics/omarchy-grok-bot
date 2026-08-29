@@ -178,7 +178,7 @@ def status() -> dict:
     source_label = "Not installed"
     if appimage_present() or (launcher.endswith("/.local/bin/grok-bot") and state):
         source = "appimage"
-        source_label = "AppImage"
+        source_label = "Linux AppImage"
         if not installed_version:
             installed_version = app_version
     elif pkg:
