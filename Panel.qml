@@ -13,6 +13,13 @@ Panel {
 
   property int actionIndex: 0
   property bool cursorActive: false
+  property int phraseIndex: 0
+  readonly property var livePhrases: [
+    "On the box",
+    "Cloud computer",
+    "Holding sand",
+    "Remote"
+  ]
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
@@ -79,7 +86,7 @@ Panel {
     if (grok.updating) return "Updating"
     if (grok.crashed) return "Crashed"
     if (grok.updateAvailable) return "Update available"
-    if (grok.running) return "Running"
+    if (grok.running) return livePhrases[phraseIndex % livePhrases.length]
     if (grok.installed) return "Idle"
     return "Not installed"
   }
@@ -128,8 +135,11 @@ Panel {
       Item {
         GrokBotIcon {
           anchors.centerIn: parent
-          iconSize: Style.space(12)
+          iconSize: Style.space(14)
           color: root.barIconColor
+          running: grok.running
+          alarming: grok.alarming
+          installed: grok.installed
           opacity: grok.installed ? 1.0 : 0.55
         }
       }
@@ -198,6 +208,9 @@ Panel {
               GrokBotIcon {
                 iconSize: Style.font.display
                 color: grok.crashed || grok.updateAvailable ? root.urgent : root.iconColor
+                running: grok.running
+                alarming: grok.alarming
+                installed: grok.installed
               }
             }
             trailingControl: Component {
@@ -296,6 +309,35 @@ Panel {
           }
         }
       }
+    }
+  }
+
+  Timer {
+    id: phraseTimer
+    interval: 2800
+    running: root.opened && grok.running && !grok.alarming && !grok.updating
+    repeat: true
+    onTriggered: phraseSwap.restart()
+  }
+
+  SequentialAnimation {
+    id: phraseSwap
+    PropertyAnimation {
+      target: hero
+      property: "metaOpacity"
+      to: 0.0
+      duration: 180
+      easing.type: Easing.OutQuad
+    }
+    ScriptAction {
+      script: root.phraseIndex = (root.phraseIndex + 1) % root.livePhrases.length
+    }
+    PropertyAnimation {
+      target: hero
+      property: "metaOpacity"
+      to: 1.0
+      duration: 260
+      easing.type: Easing.InQuad
     }
   }
 
