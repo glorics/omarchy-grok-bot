@@ -35,8 +35,8 @@ Panel {
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property color iconColor: grok.running ? foreground : dim
-  readonly property color barIconColor: grok.alarming ? (bar ? bar.urgent : urgent) : (grok.running ? (bar ? bar.barForeground : foreground) : Qt.darker(bar ? bar.barForeground : foreground, 1.55))
+  readonly property color iconColor: grok.crashed || grok.updateAvailable ? urgent : foreground
+  readonly property color barIconColor: grok.alarming ? (bar ? bar.urgent : urgent) : (bar ? bar.barForeground : foreground)
 
   readonly property var actions: buildActions()
   readonly property var selectedAction: actions.length > 0 ? actions[Math.max(0, Math.min(actionIndex, actions.length - 1))] : null
@@ -224,11 +224,11 @@ Panel {
             detail: root.heroDetail()
             foreground: root.foreground
             fontFamily: root.fontFamily
-            iconOpacity: grok.running || grok.alarming ? 1.0 : 0.7
+            iconOpacity: grok.installed ? 1.0 : 0.55
             iconComponent: Component {
               GrokBotIcon {
                 iconSize: Style.space(44)
-                color: grok.crashed || grok.updateAvailable ? root.urgent : root.iconColor
+                color: root.iconColor
                 running: grok.running
                 alarming: grok.alarming
                 installed: grok.installed
