@@ -249,6 +249,27 @@ def ago_text(epoch: float) -> str:
     return f"{hours // 24}d ago"
 
 
+def notify(summary: str, body: str) -> None:
+    icon = HOME / ".local/share/pixmaps/grok-bot.png"
+    cmd = [
+        "notify-send",
+        "-a",
+        "Grok Bot",
+        "-u",
+        "normal",
+        "-h",
+        "string:x-canonical-private-synchronous:grok-bot-update",
+        "-i",
+        str(icon) if icon.exists() else "grok-bot",
+        summary,
+        body,
+    ]
+    try:
+        subprocess.run(cmd, check=False, capture_output=True, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        return
+
+
 def fetch_latest() -> dict:
     headers = curl_headers(DARWIN_PROBE)
     latest = ""
@@ -256,10 +277,26 @@ def fetch_latest() -> dict:
     if match:
         latest = match.group(1)
     linux = linux_url_for(latest) if latest else ""
+    prev = read_json(LATEST_CACHE)
+    last_notified = strip_v(str(prev.get("lastNotified") or ""))
+    installed = strip_v(read_kv(STATE_FILE).get("tag") or "")
+    if latest and installed and version_newer(latest, installed) and latest != last_notified:
+        if linux:
+            notify(
+                f"Grok Bot {latest} is out",
+                "Linux AppImage is on the Cursor CDN. Open the bar plugin to update.",
+            )
+        else:
+            notify(
+                f"Grok Bot {latest} is out",
+                "A newer desktop build exists. No Linux AppImage on the CDN yet.",
+            )
+        last_notified = latest
     data = {
         "tag": latest,
         "linuxUrl": linux,
         "checkedAt": time.time(),
+        "lastNotified": last_notified,
     }
     write_json(LATEST_CACHE, data)
     return data

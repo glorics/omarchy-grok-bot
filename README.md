@@ -14,10 +14,10 @@ Plugin id: `glorics.grok-bot`
 
 ## What it does
 
-- Bar icon: a light globe with dark eyes that glance around and blink while the client is open
+- Bar icon: the official white sphere with two dark stadium eyes on the right; it blinks while the client is open
 - Left click: panel · right click: launch or focus · middle click: check Cursor's CDN for a newer Linux AppImage
 - Panel shows connected / window closed, whether you are signed in, and that the cloud computer stays on
-- Check for updates reads Cursor's official feed (same version as macOS/Windows). If a newer Linux AppImage is on the CDN, **Update now** downloads it
+- Check for updates reads Cursor's official feed (same version as macOS/Windows). If a newer Linux AppImage is on the CDN, **Update now** downloads it. A desktop notification fires once per new version (also on the six-hour background check)
 - While the client is open, the subtitle rotates through product facts: cloud computer, remote control, AI teammates, always on
 
 It does **not** list bots, open chats, or read Electron state beyond the
