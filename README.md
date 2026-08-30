@@ -45,7 +45,7 @@ On Omarchy / Hyprland, launch with `--ozone-platform-hint=auto` if the window do
 
 ## What it does
 
-- **Face:** the x.ai/bot statement mark (`data-state="humming"`, flipped). Stadium eyes look left and right on frames 0/8, blink by squashing like the site. Head fill is the Omarchy icon color; eyes use the theme background
+- **Face:** the official x.ai/bot `IconMark`. Eyes walk the production mood table (humming, curious, thinking, searching, happy, drowsy, …) with the site’s body bob, gaze, and squash-blink. Head fill is the Omarchy icon color; eyes use the theme background
 - **Clicks:** left opens the panel, right launches or focuses Grok Bot, middle checks Cursor's CDN for a newer Linux AppImage
 - **Panel:** connected / window closed, signed in, cloud computer stays on
 - **Updates:** same version feed as macOS/Windows. **Update now** downloads the Linux AppImage when a newer one is on the CDN. A desktop notification fires once per new version (also on a six-hour background check)

@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "glorics.grok-bot",
   "name": "Grok Bot",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "author": "glorics",
   "license": "MIT",
-  "description": "Launch and focus the official Grok Bot Linux client from the Omarchy bar. x.ai/bot humming face; status and CDN updates.",
+  "description": "Launch and focus the official Grok Bot Linux client from the Omarchy bar. Full x.ai/bot face catalog; status and CDN updates.",
   "kinds": ["bar-widget"],
   "activation": "on-demand",
   "entryPoints": {
