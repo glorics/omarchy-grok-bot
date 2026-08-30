@@ -28,6 +28,10 @@ Item {
   property string githubUrl: "https://github.com/glorics/omarchy-grok-bot"
   property string releasesUrl: "https://x.ai/bot"
   property string productUrl: "https://x.ai/bot"
+  property string computerLabel: "Always on"
+  property bool signedIn: false
+  property string signedInLabel: "No"
+  property string lastCheckText: ""
   property string actionStatus: ""
   property string lastError: ""
 
@@ -74,9 +78,8 @@ Item {
   }
 
   function checkForUpdates() {
-    actionStatus = "Official client updates in-app"
-    refresh(false)
-    actionStatusTimer.restart()
+    actionStatus = "Checking Cursor CDN…"
+    refresh(true)
   }
 
   function applyStatus(raw) {
@@ -106,6 +109,10 @@ Item {
     githubUrl = String(data.githubUrl || githubUrl)
     releasesUrl = String(data.releasesUrl || releasesUrl)
     productUrl = String(data.productUrl || productUrl)
+    computerLabel = String(data.computerLabel || "Always on")
+    signedIn = data.signedIn === true
+    signedInLabel = String(data.signedInLabel || (signedIn ? "Yes" : "No"))
+    lastCheckText = String(data.lastCheckText || "")
     lastError = ""
   }
 
@@ -121,9 +128,17 @@ Item {
   }
 
   function updateNow() {
-    actionStatus = "Use Grok Bot → Settings → Check for Updates"
-    actionStatusTimer.restart()
-    if (installed) launch()
+    if (updateProcess.running) return
+    if (!canSelfUpdate) {
+      checkForUpdates()
+      return
+    }
+    _updateOutput = ""
+    _updateError = ""
+    updating = true
+    actionStatus = "Downloading official AppImage…"
+    updateProcess.command = ["python3", helperPath(), "--update"]
+    updateProcess.running = true
   }
 
   function openGitHub() {
@@ -144,6 +159,20 @@ Item {
     running: true
     triggeredOnStart: true
     onTriggered: root.refresh(false)
+  }
+
+  Timer {
+    interval: 4000
+    repeat: false
+    running: true
+    onTriggered: root.refresh(true)
+  }
+
+  Timer {
+    interval: 21600000
+    repeat: true
+    running: true
+    onTriggered: root.refresh(true)
   }
 
   Timer {
@@ -172,10 +201,13 @@ Item {
       var stderr = String(statusStderr.text || root._statusError || "")
       if (exitCode === 0 && stdout.trim() !== "") {
         root.applyStatus(stdout)
-        if (root.actionStatus === "Official client updates in-app") {
-          root.actionStatus = root.appVersion !== ""
-            ? ("Official · " + root.appVersion + " · updates in-app")
-            : "Official client updates in-app"
+        if (root.actionStatus === "Checking Cursor CDN…") {
+          if (root.updateAvailable)
+            root.actionStatus = "Update available · " + root.latestVersion
+          else if (root.latestVersion !== "")
+            root.actionStatus = "Up to date · " + root.latestVersion
+          else
+            root.actionStatus = "Could not read the Cursor feed"
           actionStatusTimer.restart()
         }
       } else {

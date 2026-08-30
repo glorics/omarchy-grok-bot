@@ -14,12 +14,11 @@ Plugin id: `glorics.grok-bot`
 
 ## What it does
 
-- Bar icon for the official Linux client — glossy orb, official-style eyes that glance around and blink while the client is open
-- Left click: panel · right or middle click: launch or focus
-- Panel shows connected / window closed / crashed and the installed version
-- While the client is open, the subtitle rotates through what Grok Bot actually is: cloud computer, remote control, AI teammates, always on
-- While the window is closed, it says so — the cloud computer keeps running
-- Updates come from the app itself (Settings → Check for Updates), not from this plugin
+- Bar icon: a light globe with dark eyes that glance around and blink while the client is open
+- Left click: panel · right click: launch or focus · middle click: check Cursor's CDN for a newer Linux AppImage
+- Panel shows connected / window closed, whether you are signed in, and that the cloud computer stays on
+- Check for updates reads Cursor's official feed (same version as macOS/Windows). If a newer Linux AppImage is on the CDN, **Update now** downloads it
+- While the client is open, the subtitle rotates through product facts: cloud computer, remote control, AI teammates, always on
 
 It does **not** list bots, open chats, or read Electron state beyond the
 session marker the client already writes.
@@ -56,8 +55,10 @@ does not appear.
 | Input | Action |
 |---|---|
 | Left click / Enter | Open the selected row (Open / Focus by default) |
-| Right or middle click | Launch or focus Grok Bot |
-| `r` | Refresh status |
+| Right click | Launch or focus Grok Bot |
+| Middle click / `u` | Check Cursor's CDN for a newer Linux AppImage |
+| `U` | Download that AppImage when one is newer |
+| `r` | Refresh local status |
 | `g` | Open [x.ai/bot](https://x.ai/bot) |
 | `j` / `k` or arrows | Move between actions |
 | Esc | Close |

@@ -1,9 +1,10 @@
 import QtQuick
 import qs.Commons
 
-// Grok Bot mark: glossy orb, two stadium eyes on the right of the face.
-// While the box is live the pair glances around the sphere — the painted
-// capsules slide and tilt as if they were turning in sockets — then blink.
+// Light globe, dark eyes. The body stays pale so it reads on a dark bar;
+// the eyes stay dark so they read on the globe. Meridian + equator keep
+// it a globe rather than a rock. While the client is open the pair glances
+// around the sphere and blinks.
 Item {
   id: root
 
@@ -14,17 +15,22 @@ Item {
   property bool installed: true
   property real eyeTilt: 16
 
-  readonly property real luminance: 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
-  readonly property color eyeColor: luminance > 0.5
-    ? Qt.rgba(color.r * 0.12, color.g * 0.12, color.b * 0.12, 1)
-    : Qt.rgba(Math.min(1, color.r + 0.72), Math.min(1, color.g + 0.72), Math.min(1, color.b + 0.72), 1)
-  readonly property color catchColor: luminance > 0.5
-    ? Qt.rgba(1, 1, 1, 0.42)
-    : Qt.rgba(1, 1, 1, 0.58)
-  readonly property color highlightColor: luminance > 0.5
-    ? Qt.rgba(1, 1, 1, gleam)
-    : Qt.rgba(1, 1, 1, gleam * 0.55)
-  readonly property color shadeColor: Qt.rgba(0, 0, 0, luminance > 0.5 ? 0.16 : 0.28)
+  readonly property color bodyColor: {
+    if (!installed)
+      return Qt.rgba(0.62, 0.66, 0.70, 1)
+    if (alarming)
+      return Qt.rgba(0.97, 0.90, 0.86, 1)
+    if (running)
+      return Qt.rgba(0.94, 0.96, 0.98, 1)
+    return Qt.rgba(0.84, 0.88, 0.91, 1)
+  }
+  readonly property color eyeColor: alarming
+    ? Qt.rgba(0.42, 0.12, 0.12, 1)
+    : Qt.rgba(0.10, 0.12, 0.16, 1)
+  readonly property color catchColor: Qt.rgba(1, 1, 1, 0.55)
+  readonly property color highlightColor: Qt.rgba(1, 1, 1, gleam)
+  readonly property color shadeColor: Qt.rgba(0.12, 0.18, 0.24, running ? 0.16 : 0.22)
+  readonly property color lineColor: Qt.rgba(0.12, 0.18, 0.26, running ? 0.22 : 0.16)
 
   readonly property real openLid: {
     if (!installed || (alarming && !running)) return 0.14
@@ -34,7 +40,7 @@ Item {
   property real blinkLid: 1
   readonly property real lid: Math.max(0.08, openLid * blinkLid)
 
-  property real gleam: 0.22
+  property real gleam: 0.28
   property real gazeX: 0
   property real gazeY: 0
   property real gazeTilt: 0
@@ -46,7 +52,7 @@ Item {
 
   function resetFace() {
     blinkLid = 1
-    gleam = 0.18
+    gleam = 0.22
     gazeX = 0
     gazeY = 0
     gazeTilt = 0
@@ -68,7 +74,7 @@ Item {
     anchors.fill: parent
     anchors.margins: Math.max(0.5, iconSize * 0.03)
     radius: width / 2
-    color: root.color
+    color: root.bodyColor
     antialiasing: true
     clip: true
 
@@ -79,6 +85,30 @@ Item {
       x: parent.width * 0.28
       y: parent.height * 0.36
       color: root.shadeColor
+      antialiasing: true
+    }
+
+    Rectangle {
+      id: equator
+      width: parent.width * 0.96
+      height: parent.height * 0.24
+      radius: width / 2
+      anchors.centerIn: parent
+      color: "transparent"
+      border.color: root.lineColor
+      border.width: Math.max(1, parent.width * 0.04)
+      antialiasing: true
+    }
+
+    Rectangle {
+      id: meridian
+      width: parent.width * 0.36
+      height: parent.height * 0.98
+      radius: height / 2
+      anchors.centerIn: parent
+      color: "transparent"
+      border.color: root.lineColor
+      border.width: Math.max(1, parent.width * 0.04)
       antialiasing: true
     }
 
@@ -139,8 +169,8 @@ Item {
   SequentialAnimation on gleam {
     running: root.live
     loops: Animation.Infinite
-    NumberAnimation { to: 0.40; duration: 1600; easing.type: Easing.InOutSine }
-    NumberAnimation { to: 0.18; duration: 1600; easing.type: Easing.InOutSine }
+    NumberAnimation { to: 0.48; duration: 1600; easing.type: Easing.InOutSine }
+    NumberAnimation { to: 0.22; duration: 1600; easing.type: Easing.InOutSine }
   }
 
   SequentialAnimation on breath {
@@ -150,8 +180,6 @@ Item {
     NumberAnimation { to: 1.0; duration: 2200; easing.type: Easing.InOutSine }
   }
 
-  // Alive: look around the sphere, blink, look again. Holds are long enough
-  // that the bar does not flicker; the travel is what reads as "turning."
   SequentialAnimation {
     id: liveLook
     running: root.live

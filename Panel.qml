@@ -59,6 +59,22 @@ Panel {
       })
     }
     rows.push({
+      id: "check",
+      label: grok.refreshing && grok.actionStatus.indexOf("Checking") === 0
+        ? "Checking…"
+        : "Check for updates",
+      hint: "U",
+      run: function() { grok.checkForUpdates() }
+    })
+    if (grok.canSelfUpdate && grok.updateAvailable) {
+      rows.push({
+        id: "update",
+        label: grok.updating ? "Updating…" : "Update now",
+        hint: "Shift+U",
+        run: function() { grok.updateNow() }
+      })
+    }
+    rows.push({
       id: "product",
       label: "Open x.ai/bot",
       hint: "G",
@@ -150,10 +166,9 @@ Panel {
       }
     }
     onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton || buttonCode === Qt.MiddleButton)
-        grok.launch()
-      else
-        root.toggle()
+      if (buttonCode === Qt.RightButton) grok.launch()
+      else if (buttonCode === Qt.MiddleButton) grok.checkForUpdates()
+      else root.toggle()
     }
   }
 
@@ -180,6 +195,8 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
         if (t === "r" || t === "R") grok.refresh(false)
+        else if (t === "u") grok.checkForUpdates()
+        else if (t === "U") grok.updateNow()
         else if (t === "g" || t === "G") { grok.openProduct(); root.close() }
       }
 
@@ -239,7 +256,7 @@ Panel {
           }
 
           BorderSurface {
-            visible: grok.crashed || !grok.installed
+            visible: grok.crashed || !grok.installed || grok.updateAvailable
             width: parent.width
             implicitHeight: statusText.implicitHeight + Style.spacing.xl * 2
             color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.10)
@@ -255,7 +272,9 @@ Panel {
               anchors.rightMargin: Style.space(12)
               text: grok.crashed
                 ? "The last session ended unexpectedly. Open Grok Bot to start a new one."
-                : "Install the official Linux AppImage, then this widget can launch it."
+                : (!grok.installed
+                  ? "Install the official Linux AppImage, then this widget can launch it."
+                  : ("Grok Bot " + grok.latestVersion + " is on the Cursor CDN."))
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
@@ -267,10 +286,22 @@ Panel {
             width: parent.width
             spacing: Style.spacing.labelGap
             InfoPair { label: "Status"; value: grok.statusText }
+            InfoPair { label: "Computer"; value: grok.computerLabel }
+            InfoPair { label: "Signed in"; value: grok.signedInLabel }
             InfoPair {
               visible: grok.appVersion !== "" || grok.installedVersion !== ""
               label: "Version"
               value: grok.appVersion || grok.installedVersion
+            }
+            InfoPair {
+              visible: grok.latestVersion !== ""
+              label: "Latest"
+              value: grok.latestVersion + (grok.updateAvailable ? " · newer" : " · current")
+            }
+            InfoPair {
+              visible: grok.lastCheckText !== ""
+              label: "Checked"
+              value: grok.lastCheckText
             }
             InfoPair { label: "Source"; value: grok.sourceLabel }
           }
@@ -297,7 +328,7 @@ Panel {
           Text {
             width: parent.width
             topPadding: Style.space(2)
-            text: "Official Linux client · updates in the app"
+            text: "Official Linux client · Cursor CDN"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
