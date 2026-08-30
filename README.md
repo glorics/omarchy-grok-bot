@@ -5,9 +5,10 @@
 
 The official [x.ai/bot](https://x.ai/bot) on the Omarchy bar. Official Linux client. Community plugin by **glorics**.
 
-![](docs/widget-demo.mp4)
-
-![](docs/widget-demo-open.mp4)
+<p align="center">
+  <video src="docs/widget-demo.mp4" width="400" controls muted loop playsinline></video>
+  <video src="docs/widget-demo-open.mp4" width="400" controls muted loop playsinline></video>
+</p>
 
 <p align="center">
   <img src="preview.png" alt="Grok Bot on Omarchy" width="360">
