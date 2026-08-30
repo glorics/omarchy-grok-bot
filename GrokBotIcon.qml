@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
+import Quickshell
 import Quickshell.Io
 import qs.Commons
 
@@ -25,9 +26,11 @@ Item {
   property real nowMs: 0
   property string mood: "idle"
   property int frameIndex: 0
+  property var themePalette: ({})
 
   readonly property bool awake: installed && !alarming
   readonly property real s: width / 259
+  readonly property real headC: 114.2705
   readonly property color bodyColor: root.color
   readonly property color eyeColor: Color.background
   readonly property real wobble: {
@@ -37,9 +40,26 @@ Item {
       return 1.6
     return 1.0
   }
+  readonly property real wobbleX: 2 * Math.sin(nowMs / 1000 * 0.4) * s * wobble
+  readonly property real wobbleY: 1.5 * Math.sin(nowMs / 1000 * 0.3) * s * wobble
+  readonly property bool orbitHero: width >= 28
+  readonly property real orbitMin: orbitHero ? 3.2 : 2.2
 
-  // Official face-only states. Morph overlays (orbit, radar, pencil, …)
-  // stay off — they do not read at bar size.
+  // Official eB palette order (coral, blue, green, gold, violet), remapped
+  // onto the active Omarchy theme so Tokyo Night (and every other theme)
+  // keeps the same five-bead orbit without the x.ai brand reds.
+  readonly property var orbitColors: {
+    var p = themePalette || {}
+    return [
+      p.red || p.bright_red || String(Color.urgent),
+      p.blue || p.accent || String(Color.accent),
+      p.green || p.bright_green || String(Color.accent),
+      p.yellow || p.orange || p.bright_yellow || String(Color.foreground),
+      p.magenta || p.bright_magenta || String(Color.muted)
+    ]
+  }
+
+  // Official face states from 1em52idajmaks.js. Orbit is a separate overlay.
   readonly property var liveCatalog: [
     { name: "idle", frames: [0, 8], hold: [2800, 5200], stay: [6000, 10000] },
     { name: "humming", frames: [0, 8], hold: [3500, 7000], stay: [5000, 9000] },
@@ -164,6 +184,17 @@ Item {
     return look
   }
 
+  function parsePalette(text) {
+    var map = {}
+    var lines = String(text || "").split("\n")
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].match(/^\s*([A-Za-z0-9_]+)\s*=\s*"?(#[0-9A-Fa-f]{6})/)
+      if (m)
+        map[m[1]] = m[2]
+    }
+    themePalette = map
+  }
+
   width: iconSize
   height: iconSize
   implicitWidth: iconSize
@@ -182,6 +213,14 @@ Item {
         root.pickMood()
       } catch (e) { }
     }
+  }
+
+  FileView {
+    id: themeFile
+    path: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/colors.toml"
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.parsePalette(themeFile.text())
   }
 
   NumberAnimation {
@@ -251,12 +290,22 @@ Item {
     }
   }
 
+  // Official eB orbit: 5 beads on a 3D ellipse, radius 52, y-squash 0.42,
+  // 0.0017 rad/ms. Unrolled — Repeater `index` is not in scope inside the
+  // bar/panel Component. No lagged trails: at hero size they smear into a belt.
+  OrbitDot { slot: 0; lag: 0 }
+  OrbitDot { slot: 1; lag: 0 }
+  OrbitDot { slot: 2; lag: 0 }
+  OrbitDot { slot: 3; lag: 0 }
+  OrbitDot { slot: 4; lag: 0 }
+
   Shape {
     id: markShape
     width: 259
     height: 259
-    x: 15 * root.s + 2 * Math.sin(root.nowMs / 1000 * 0.4) * root.s * root.wobble
-    y: 15 * root.s + 1.5 * Math.sin(root.nowMs / 1000 * 0.3) * root.s * root.wobble
+    x: 15 * root.s + root.wobbleX
+    y: 15 * root.s + root.wobbleY
+    z: 2
     transformOrigin: Item.TopLeft
     scale: root.s
     preferredRendererType: Shape.CurveRenderer
@@ -276,6 +325,37 @@ Item {
       fillColor: root.eyeColor
       strokeWidth: 0
       PathSvg { path: root.eye1Path }
+    }
+  }
+
+  component OrbitDot: Rectangle {
+    required property int slot
+    required property real lag
+    readonly property real ang: root.nowMs * 0.0017 + slot * Math.PI * 2 / 5 - lag
+    readonly property real facing: Math.cos(ang)
+    readonly property real lit: 0.5 + 0.5 * Math.max(0, Math.min(1, facing))
+    readonly property real pr: Math.max(12 * lit, 0.3)
+    readonly property real diam: Math.max(root.orbitMin, pr * root.s * 2)
+    x: (root.headC + 52 * Math.sin(ang) + 15) * root.s + root.wobbleX - width / 2
+    y: (root.headC - 0.42 * 52 * Math.cos(ang) + 15) * root.s + root.wobbleY - height / 2
+    width: diam
+    height: diam
+    radius: width / 2
+    color: root.orbitColors[slot % 5]
+    opacity: Math.max(0.18, Math.min(1, (facing + 0.4) / 0.6)) * (lag > 0.01 ? 0.34 : 1)
+    z: facing > 0 ? 3 : 0
+    visible: root.installed && root.orbitHero
+    antialiasing: true
+
+    Rectangle {
+      visible: root.orbitHero && lag < 0.01
+      width: parent.width * 0.34
+      height: width
+      radius: width / 2
+      x: parent.width * 0.22
+      y: parent.height * 0.16
+      color: "#ffffff"
+      opacity: 0.32
     }
   }
 }

@@ -46,6 +46,7 @@ On Omarchy / Hyprland, launch with `--ozone-platform-hint=auto` if the window do
 ## What it does
 
 - **Face:** the real x.ai/bot `IconMark` (head path + 25 eye rings from production JS). Head fill is the Omarchy icon color; eyes use the theme background. Moods cycle from the official table — idle, curious, thinking, listening, happy, drowsy, and the rest — instead of looping one glance
+- **Orbit:** the official five-bead 3D ellipse from x.ai/bot (radius 52, y-squash 0.42, 0.0017 rad/ms). Bead colors come from the active Omarchy theme (Tokyo Night red/blue/green/yellow/magenta, and the matching keys on every other theme) instead of the x.ai brand palette
 - **Clicks:** left opens the panel, right launches or focuses Grok Bot, middle checks Cursor's CDN for a newer Linux AppImage
 - **Panel:** connected / window closed, signed in, cloud computer stays on
 - **Updates:** same version feed as macOS/Windows. **Update now** downloads the Linux AppImage when a newer one is on the CDN. A desktop notification fires once per new version (also on a six-hour background check)
