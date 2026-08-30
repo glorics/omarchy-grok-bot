@@ -1,13 +1,12 @@
 import QtQuick
 import QtQuick.Shapes
-import Quickshell
 import Quickshell.Io
 import qs.Commons
 
-// Real x.ai/bot mark: official HEAD path + 25 eye rings (2wb8j23k0ritc.js).
-// Moods and frame lists come from the production state table in
-// 1em52idajmaks.js. Head fill is the Omarchy icon color; eyes use the
-// theme background — same pairing as other bar symbols.
+// x.ai/bot statement mark: humming (data-state="humming", scaleX -1).
+// Frames 0 and 8 are the stadium-eye look-around from production JS.
+// Blink is an eye-scale squash (official u.t), not a different expression.
+// No orbit overlay — that section of the site does not use one.
 Item {
   id: root
 
@@ -18,73 +17,17 @@ Item {
   property bool installed: true
 
   property var mark: null
-  property int fromId: 0
-  property int toId: 0
-  property real mix: 1
+  property real mix: 0
   property real blink: 0
   property real follow: 0
   property real nowMs: 0
-  property string mood: "idle"
-  property int frameIndex: 0
-  property var themePalette: ({})
 
   readonly property bool awake: installed && !alarming
   readonly property real s: width / 259
-  readonly property real headC: 114.2705
   readonly property color bodyColor: root.color
   readonly property color eyeColor: Color.background
-  readonly property real wobble: {
-    if (mood === "playful" || mood === "searching" || mood === "excited")
-      return 2.4
-    if (mood === "curious" || mood === "confused" || mood === "laughing")
-      return 1.6
-    return 1.0
-  }
-  readonly property real wobbleX: 2 * Math.sin(nowMs / 1000 * 0.4) * s * wobble
-  readonly property real wobbleY: 1.5 * Math.sin(nowMs / 1000 * 0.3) * s * wobble
-  readonly property bool orbitHero: width >= 28
-  readonly property real orbitMin: orbitHero ? 3.2 : 2.2
-
-  // Official eB palette order (coral, blue, green, gold, violet), remapped
-  // onto the active Omarchy theme so Tokyo Night (and every other theme)
-  // keeps the same five-bead orbit without the x.ai brand reds.
-  readonly property var orbitColors: {
-    var p = themePalette || {}
-    return [
-      p.red || p.bright_red || String(Color.urgent),
-      p.blue || p.accent || String(Color.accent),
-      p.green || p.bright_green || String(Color.accent),
-      p.yellow || p.orange || p.bright_yellow || String(Color.foreground),
-      p.magenta || p.bright_magenta || String(Color.muted)
-    ]
-  }
-
-  // Official face states from 1em52idajmaks.js. Orbit is a separate overlay.
-  readonly property var liveCatalog: [
-    { name: "idle", frames: [0, 8], hold: [2800, 5200], stay: [6000, 10000] },
-    { name: "humming", frames: [0, 8], hold: [3500, 7000], stay: [5000, 9000] },
-    { name: "curious", frames: [3, 21, 0, 15], hold: [1800, 3200], stay: [5000, 8000] },
-    { name: "thinking", frames: [8, 16, 14, 17, 5], hold: [2000, 3600], stay: [5000, 9000] },
-    { name: "listening", frames: [10, 1, 19], hold: [2800, 5000], stay: [5000, 8000] },
-    { name: "happy", frames: [2, 11, 17, 19], hold: [2500, 4500], stay: [4500, 8000] },
-    { name: "playful", frames: [2, 17, 11, 8], hold: [1500, 3000], stay: [4000, 7000] },
-    { name: "searching", frames: [15, 9, 3, 20, 12, 18], hold: [1000, 1800], stay: [4000, 7000] },
-    { name: "working", frames: [7, 16, 11, 10], hold: [1800, 3200], stay: [5000, 8000] },
-    { name: "surprised", frames: [3, 21], hold: [2500, 4000], stay: [2800, 4200] },
-    { name: "proud", frames: [15, 8, 2], hold: [3500, 6000], stay: [4500, 7000] },
-    { name: "laughing", frames: [2, 11, 17], hold: [1200, 2400], stay: [3500, 5500] },
-    { name: "excited", frames: [2, 17, 21, 3, 11], hold: [1100, 2000], stay: [3500, 5500] }
-  ]
-  readonly property var restCatalog: [
-    { name: "idle", frames: [0, 8], hold: [3500, 7000], stay: [7000, 12000] },
-    { name: "humming", frames: [0, 8], hold: [4000, 8000], stay: [6000, 10000] },
-    { name: "drowsy", frames: [4, 22, 13], hold: [4000, 8000], stay: [6000, 10000] },
-    { name: "bored", frames: [4, 22, 0], hold: [3500, 6000], stay: [6000, 10000] },
-    { name: "shy", frames: [0, 24, 13], hold: [3000, 5500], stay: [5000, 8000] },
-    { name: "curious", frames: [3, 21, 0, 15], hold: [1800, 3200], stay: [5000, 8000] },
-    { name: "confused", frames: [14, 5, 8], hold: [2200, 3800], stay: [4500, 7000] },
-    { name: "sad", frames: [4, 13, 22], hold: [4000, 7000], stay: [5000, 8000] }
-  ]
+  readonly property real wobbleX: 2 * Math.sin(nowMs / 1000 * 0.4) * s
+  readonly property real wobbleY: 1.5 * Math.sin(nowMs / 1000 * 0.3) * s
 
   readonly property string headPath: mark && mark.head ? mark.head : fallbackHead
   readonly property string eye0Path: ringPath(eyeRing(0))
@@ -113,86 +56,38 @@ Item {
     return out
   }
 
+  function scaleRingY(pts, sy) {
+    if (!pts || pts.length === 0) return pts || []
+    var cx = 0, cy = 0, n = pts.length
+    for (var i = 0; i < n; i++) {
+      cx += pts[i][0]
+      cy += pts[i][1]
+    }
+    cx /= n
+    cy /= n
+    var out = []
+    for (var j = 0; j < n; j++)
+      out.push([pts[j][0], cy + (pts[j][1] - cy) * sy])
+    return out
+  }
+
   function expr(frameId) {
     if (!mark || !mark.expressions) return null
     var n = Math.max(0, Math.min(mark.expressions.length - 1, frameId))
     return mark.expressions[n]
   }
 
-  function moodTable() {
-    return root.running ? liveCatalog : restCatalog
-  }
-
-  function currentMood() {
-    var rows = moodTable()
-    for (var slot = 0; slot < rows.length; slot++) {
-      if (rows[slot].name === mood)
-        return rows[slot]
-    }
-    return rows[0]
-  }
-
-  function randMs(pair) {
-    return Math.round(pair[0] + Math.random() * (pair[1] - pair[0]))
-  }
-
-  function goTo(frameId) {
-    if (frameId === toId && mix >= 0.99) return
-    fromId = mix >= 0.5 ? toId : fromId
-    toId = frameId
-    mix = 0
-    mixAnim.restart()
-  }
-
-  function advanceFrame() {
-    var row = currentMood()
-    if (!row || !row.frames || row.frames.length === 0) return
-    var n = row.frames.length
-    frameIndex = (frameIndex + 1 + Math.floor(Math.random() * Math.max(0, n - 1))) % n
-    goTo(row.frames[frameIndex])
-    holdTimer.interval = randMs(row.hold)
-  }
-
-  function pickMood() {
-    var rows = moodTable()
-    if (!rows || rows.length === 0) return
-    var slot = Math.floor(Math.random() * rows.length)
-    if (rows[slot].name === mood && rows.length > 1)
-      slot = (slot + 1 + Math.floor(Math.random() * (rows.length - 1))) % rows.length
-    mood = rows[slot].name
-    frameIndex = 0
-    goTo(rows[slot].frames[0])
-    holdTimer.interval = randMs(rows[slot].hold)
-    moodTimer.interval = randMs(rows[slot].stay)
-    holdTimer.restart()
-    moodTimer.restart()
-  }
-
   function eyeRing(which) {
-    var a = expr(fromId)
-    var b = expr(toId)
-    var c = expr(4)
+    var a = expr(0)
+    var b = expr(8)
     if (!a) return []
-    var look = lerpRing(a[which], b ? b[which] : a[which], Math.max(0, Math.min(1, mix)))
-    if (follow !== 0) {
-      var gaze = expr(follow > 0 ? 0 : 8)
-      if (gaze)
-        look = lerpRing(look, gaze[which], Math.min(0.55, Math.abs(follow) * 0.45))
-    }
-    if (c && blink > 0.01)
-      look = lerpRing(look, c[which], blink)
+    var t = Math.max(0, Math.min(1, mix))
+    if (follow !== 0)
+      t = Math.max(0, Math.min(1, t + follow * 0.45))
+    var look = lerpRing(a[which], b ? b[which] : a[which], t)
+    if (blink > 0.01)
+      look = scaleRingY(look, 1 - 0.92 * blink)
     return look
-  }
-
-  function parsePalette(text) {
-    var map = {}
-    var lines = String(text || "").split("\n")
-    for (var i = 0; i < lines.length; i++) {
-      var m = lines[i].match(/^\s*([A-Za-z0-9_]+)\s*=\s*"?(#[0-9A-Fa-f]{6})/)
-      if (m)
-        map[m[1]] = m[2]
-    }
-    themePalette = map
   }
 
   width: iconSize
@@ -200,72 +95,44 @@ Item {
   implicitWidth: iconSize
   implicitHeight: iconSize
 
-  onRunningChanged: if (mark) Qt.callLater(pickMood)
-  onAwakeChanged: if (awake && mark) Qt.callLater(pickMood)
-
   FileView {
     id: markFile
     path: decodeURIComponent(Qt.resolvedUrl("official-mark.json").toString().replace(/^file:\/\//, ""))
     printErrors: false
     onLoaded: {
-      try {
-        root.mark = JSON.parse(markFile.text())
-        root.pickMood()
-      } catch (e) { }
+      try { root.mark = JSON.parse(markFile.text()) }
+      catch (e) { }
     }
   }
 
-  FileView {
-    id: themeFile
-    path: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/colors.toml"
-    watchChanges: true
-    printErrors: false
-    onLoaded: root.parsePalette(themeFile.text())
-  }
-
-  NumberAnimation {
-    id: mixAnim
-    target: root
-    property: "mix"
-    from: 0
-    to: 1
-    duration: 480
-    easing.type: Easing.InOutCubic
-  }
-
-  Timer {
-    id: holdTimer
-    interval: 3200
+  SequentialAnimation {
     running: root.awake && root.mark
-    repeat: true
-    onTriggered: root.advanceFrame()
+    loops: Animation.Infinite
+    PauseAnimation { duration: 1600 }
+    NumberAnimation { target: root; property: "mix"; to: 1; duration: 640; easing.type: Easing.InOutCubic }
+    PauseAnimation { duration: 1800 }
+    NumberAnimation { target: root; property: "mix"; to: 0; duration: 640; easing.type: Easing.InOutCubic }
+    PauseAnimation { duration: 900 }
   }
 
   Timer {
-    id: moodTimer
-    interval: 7000
+    interval: 2800 + Math.random() * 2200
     running: root.awake && root.mark
-    repeat: true
-    onTriggered: root.pickMood()
-  }
-
-  Timer {
-    id: blinkTimer
-    interval: 4500 + Math.random() * 5000
-    running: root.awake && root.mark && mood !== "drowsy"
     repeat: true
     onTriggered: {
       blinkAnim.restart()
-      interval = 5000 + Math.random() * 9000
+      interval = 3200 + Math.random() * 4200
     }
   }
 
   SequentialAnimation {
     id: blinkAnim
     NumberAnimation { target: root; property: "blink"; to: 1; duration: 70; easing.type: Easing.OutQuad }
+    PauseAnimation { duration: 40 }
     NumberAnimation { target: root; property: "blink"; to: 0; duration: 110; easing.type: Easing.OutCubic }
     PauseAnimation { duration: 80 }
     NumberAnimation { target: root; property: "blink"; to: 1; duration: 70; easing.type: Easing.OutQuad }
+    PauseAnimation { duration: 40 }
     NumberAnimation { target: root; property: "blink"; to: 0; duration: 110; easing.type: Easing.OutCubic }
   }
 
@@ -283,79 +150,47 @@ Item {
       root.nowMs = Date.now()
       if (hover.hovered && root.width > 1) {
         var nx = hover.point.position.x / root.width
-        root.follow = Math.max(-1, Math.min(1, (0.5 - nx) * 1.6))
+        root.follow = Math.max(-1, Math.min(1, (nx - 0.5) * 1.6))
       } else {
         root.follow = 0
       }
     }
   }
 
-  // Official eB orbit: 5 beads on a 3D ellipse, radius 52, y-squash 0.42,
-  // 0.0017 rad/ms. Unrolled — Repeater `index` is not in scope inside the
-  // bar/panel Component. No lagged trails: at hero size they smear into a belt.
-  OrbitDot { slot: 0; lag: 0 }
-  OrbitDot { slot: 1; lag: 0 }
-  OrbitDot { slot: 2; lag: 0 }
-  OrbitDot { slot: 3; lag: 0 }
-  OrbitDot { slot: 4; lag: 0 }
-
-  Shape {
-    id: markShape
-    width: 259
-    height: 259
-    x: 15 * root.s + root.wobbleX
-    y: 15 * root.s + root.wobbleY
-    z: 2
-    transformOrigin: Item.TopLeft
-    scale: root.s
-    preferredRendererType: Shape.CurveRenderer
-    antialiasing: true
-
-    ShapePath {
-      fillColor: root.bodyColor
-      strokeWidth: 0
-      PathSvg { path: root.headPath }
+  // Marketing mark is flipped (svg transform: scaleX(-1) on x.ai/bot).
+  Item {
+    anchors.fill: parent
+    transform: Scale {
+      xScale: -1
+      origin.x: root.width / 2
     }
-    ShapePath {
-      fillColor: root.eyeColor
-      strokeWidth: 0
-      PathSvg { path: root.eye0Path }
-    }
-    ShapePath {
-      fillColor: root.eyeColor
-      strokeWidth: 0
-      PathSvg { path: root.eye1Path }
-    }
-  }
 
-  component OrbitDot: Rectangle {
-    required property int slot
-    required property real lag
-    readonly property real ang: root.nowMs * 0.0017 + slot * Math.PI * 2 / 5 - lag
-    readonly property real facing: Math.cos(ang)
-    readonly property real lit: 0.5 + 0.5 * Math.max(0, Math.min(1, facing))
-    readonly property real pr: Math.max(12 * lit, 0.3)
-    readonly property real diam: Math.max(root.orbitMin, pr * root.s * 2)
-    x: (root.headC + 52 * Math.sin(ang) + 15) * root.s + root.wobbleX - width / 2
-    y: (root.headC - 0.42 * 52 * Math.cos(ang) + 15) * root.s + root.wobbleY - height / 2
-    width: diam
-    height: diam
-    radius: width / 2
-    color: root.orbitColors[slot % 5]
-    opacity: Math.max(0.18, Math.min(1, (facing + 0.4) / 0.6)) * (lag > 0.01 ? 0.34 : 1)
-    z: facing > 0 ? 3 : 0
-    visible: root.installed && root.orbitHero
-    antialiasing: true
+    Shape {
+      id: markShape
+      width: 259
+      height: 259
+      x: 15 * root.s + root.wobbleX
+      y: 15 * root.s + root.wobbleY
+      transformOrigin: Item.TopLeft
+      scale: root.s
+      preferredRendererType: Shape.CurveRenderer
+      antialiasing: true
 
-    Rectangle {
-      visible: root.orbitHero && lag < 0.01
-      width: parent.width * 0.34
-      height: width
-      radius: width / 2
-      x: parent.width * 0.22
-      y: parent.height * 0.16
-      color: "#ffffff"
-      opacity: 0.32
+      ShapePath {
+        fillColor: root.bodyColor
+        strokeWidth: 0
+        PathSvg { path: root.headPath }
+      }
+      ShapePath {
+        fillColor: root.eyeColor
+        strokeWidth: 0
+        PathSvg { path: root.eye0Path }
+      }
+      ShapePath {
+        fillColor: root.eyeColor
+        strokeWidth: 0
+        PathSvg { path: root.eye1Path }
+      }
     }
   }
 }
