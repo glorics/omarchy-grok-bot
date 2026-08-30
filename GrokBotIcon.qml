@@ -1,9 +1,11 @@
 import QtQuick
 import qs.Commons
 
-// x.ai/bot mascot, dark-theme: light circle, dark stadium eyes as holes.
-// Eyes live on a sphere (rest yaw/pitch/roll from the official idle).
-// Life is gaze drift, blinking, a 0.5% breath, and pointer follow.
+// x.ai/bot idle face (dark theme: light body, dark eye holes).
+// Positions are the official rest pose at radius 100, scaled to the icon:
+// inner  (21.42, -43.32), outer (62.98, -53.90), tilt \\ ~26°.
+// Animation is the same as the page: blink, gaze drift, pointer follow,
+// 0.5% breath. No float.
 Item {
   id: root
 
@@ -13,17 +15,7 @@ Item {
   property bool alarming: false
   property bool installed: true
 
-  // Official idle measurements (ball radius = 1).
-  readonly property real eyeSplit: 15.46
-  readonly property real eyeW: 0.186
-  readonly property real eyeH: 0.412
-  readonly property real restYaw: 28.49
-  readonly property real restPitch: 28.62
-  readonly property real restRoll: -13
-
-  readonly property real radius: Math.max(1, width / 2 - Math.max(0.5, iconSize * 0.03))
-  readonly property real cx: width / 2
-  readonly property real cy: height / 2
+  readonly property real radius: Math.max(4, width / 2 - Math.max(0.5, iconSize * 0.03))
 
   readonly property color bodyColor: {
     if (!installed)
@@ -40,37 +32,21 @@ Item {
   }
 
   property real t: 0
-  property real followYaw: 0
-  property real followPitch: 0
+  property real followX: 0
+  property real followY: 0
   property real followMix: 0
 
   readonly property bool awake: installed && !alarming
-  readonly property real wander: followMix > 0.5 ? 0.15 : (running ? 1.0 : 0.75)
+  readonly property real wander: followMix > 0.4 ? 0.12 : (running ? 1.0 : 0.75)
 
-  readonly property real dYaw: awake ? (Math.sin(t / 11.3) * 5.5 + Math.sin(t / 3.7 + 2.1) * 1.6) * wander : 0
-  readonly property real dPitch: awake ? (Math.sin(t / 9.1 + 1.3) * 4.2 + Math.sin(t / 4.3 + 0.7) * 1.3) * wander : 0
-  readonly property real dRoll: awake ? Math.sin(t / 13.7 + 3.2) * 2.2 * wander : 0
+  readonly property real driftX: awake ? (Math.sin(t / 3.7 + 2.1) * 0.035 + Math.sin(t / 11.3) * 0.02) * wander : 0
+  readonly property real driftY: awake ? (Math.sin(t / 4.3 + 0.7) * 0.028 + Math.sin(t / 9.1 + 1.3) * 0.018) * wander : 0
+  readonly property real gazeX: driftX + followX * followMix
+  readonly property real gazeY: driftY + followY * followMix
   readonly property real breath: awake ? 1 + Math.sin(t / 3.4 * Math.PI * 2) * 0.005 : 1
   readonly property real lid: awake ? blinkLidAt(t) : (installed ? 0.40 : 0.14)
+  readonly property real tilt: -26
 
-  readonly property real yaw: restYaw * (1 - followMix) + followYaw * followMix + dYaw
-  readonly property real pitch: restPitch * (1 - followMix) + followPitch * followMix + dPitch
-  readonly property real roll: restRoll + dRoll
-
-  readonly property var innerEye: eyePose(-1)
-  readonly property var outerEye: eyePose(1)
-
-  function deg(d) { return d * Math.PI / 180 }
-
-  function spin(u, v, ang) {
-    var c = Math.cos(ang), s = Math.sin(ang)
-    return [
-      [u[0] * c + v[0] * s, u[1] * c + v[1] * s, u[2] * c + v[2] * s],
-      [v[0] * c - u[0] * s, v[1] * c - u[1] * s, v[2] * c - u[2] * s]
-    ]
-  }
-
-  // Official blink: 0.18s, close fast, open slower. Occasional double.
   function blinkLidAt(time) {
     var period = 3.15
     var local = time % period
@@ -79,7 +55,6 @@ Item {
       k = local / 0.18
       return k < 0.45 ? 1 - k / 0.45 : (k - 0.45) / 0.55
     }
-    // every fifth cycle, a second blink 0.24s later
     var n = Math.floor(time / period)
     if (n % 5 === 0 && local >= 0.42 && local <= 0.60) {
       k = (local - 0.42) / 0.18
@@ -88,43 +63,11 @@ Item {
     return 1
   }
 
-  function blinkScale(open) {
-    return 0.06 + 0.94 * Math.max(0, Math.min(1, open))
-  }
-
-  function eyePose(side) {
-    var f = [0, 0, 1]
-    var right = [1, 0, 0]
-    var down = [0, 1, 0]
-    var r
-    r = spin(f, right, deg(yaw)); f = r[0]; right = r[1]
-    r = spin(down, f, deg(pitch)); down = r[0]; f = r[1]
-    r = spin(right, down, deg(roll)); right = r[0]; down = r[1]
-    r = spin(f, right, deg(eyeSplit * side))
-    var ef = r[0], er = r[1]
-    var k = blinkScale(lid)
-    return {
-      x: ef[0] * radius,
-      y: ef[1] * radius,
-      a: er[0],
-      b: er[1] * k,
-      c: down[0],
-      d: down[1] * k,
-      depth: ef[2]
-    }
-  }
-
   function followFrom(px, py) {
     if (width <= 1 || height <= 1) return
-    var nx = (px / width) * 2 - 1
-    var ny = (py / height) * 2 - 1
-    followYaw = Math.max(-40, Math.min(40, nx * 38))
-    followPitch = Math.max(-28, Math.min(28, -ny * 28))
+    followX = Math.max(-0.22, Math.min(0.22, (px / width - 0.5) * 0.44))
+    followY = Math.max(-0.18, Math.min(0.18, (py / height - 0.5) * 0.36))
     followMix = 1
-  }
-
-  function clearFollow() {
-    followMix = 0
   }
 
   width: iconSize
@@ -142,25 +85,50 @@ Item {
       root.t = Date.now() / 1000
       if (hover.hovered)
         root.followFrom(hover.point.position.x, hover.point.position.y)
+      else
+        root.followMix = 0
     }
   }
 
-  Behavior on followYaw { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
-  Behavior on followPitch { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
+  Behavior on followX { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
+  Behavior on followY { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
   Behavior on followMix { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
 
   HoverHandler {
     id: hover
     enabled: root.awake
-    onHoveredChanged: if (!hovered) root.clearFollow()
+  }
+
+  property real orbit: 0
+  SequentialAnimation on orbit {
+    running: root.installed && !root.alarming
+    loops: Animation.Infinite
+    NumberAnimation { from: 0; to: 360; duration: 14000; easing.type: Easing.Linear }
   }
 
   Item {
-    id: ball
     anchors.centerIn: parent
     width: root.radius * 2
     height: root.radius * 2 * root.breath
-    transformOrigin: Item.Center
+
+    Orbit {
+      hue: Qt.rgba(0.96, 0.55, 0.70, 0.9)
+      tilt: 28
+      spin: root.orbit
+      fat: 1.42
+    }
+    Orbit {
+      hue: Qt.rgba(0.98, 0.72, 0.48, 0.85)
+      tilt: -18
+      spin: -root.orbit * 0.85
+      fat: 1.28
+    }
+    Orbit {
+      hue: Qt.rgba(0.45, 0.82, 0.86, 0.88)
+      tilt: 52
+      spin: root.orbit * 1.1 + 40
+      fat: 1.18
+    }
 
     Rectangle {
       id: head
@@ -169,41 +137,52 @@ Item {
       color: root.bodyColor
       antialiasing: true
       clip: true
+      z: 2
 
-      EyeCapsule {
-        pose: root.innerEye
-        visible: root.innerEye.depth > 0.02
+      Eye {
+        rx: 0.2142
+        ry: -0.4332
+        squeeze: 0.87
       }
-      EyeCapsule {
-        pose: root.outerEye
-        visible: root.outerEye.depth > 0.02
+      Eye {
+        rx: 0.6298
+        ry: -0.5390
+        squeeze: 0.64
       }
     }
   }
 
-  component EyeCapsule: Item {
-    property var pose: ({ x: 0, y: 0, a: 1, b: 0, c: 0, d: 1, depth: 1 })
+  component Orbit: Rectangle {
+    property color hue: "white"
+    property real tilt: 0
+    property real spin: 0
+    property real fat: 1.3
+    visible: root.installed && root.width >= 20
+    opacity: root.running ? 1 : 0.7
+    anchors.centerIn: parent
+    width: parent.width * fat
+    height: parent.height * 0.42
+    radius: height / 2
+    color: "transparent"
+    border.color: hue
+    border.width: Math.max(1.4, parent.width * 0.04)
+    rotation: tilt + spin
+    antialiasing: true
+    z: 1
+  }
 
-    x: head.width / 2
-    y: head.height / 2
-    width: 0
-    height: 0
+  component Eye: Rectangle {
+    property real rx: 0
+    property real ry: 0
+    property real squeeze: 1
 
-    Rectangle {
-      width: Math.max(2, root.radius * root.eyeW)
-      height: Math.max(3, root.radius * root.eyeH)
-      radius: width / 2
-      color: root.eyeColor
-      antialiasing: true
-      x: -width / 2
-      y: -height / 2
-      transform: Matrix4x4 {
-        matrix: Qt.matrix4x4(
-          pose.a, pose.c, 0, pose.x,
-          pose.b, pose.d, 0, pose.y,
-          0, 0, 1, 0,
-          0, 0, 0, 1)
-      }
-    }
+    width: Math.max(2.6, head.width * 0.145 * squeeze)
+    height: Math.max(4.2, head.height * 0.32 * root.lid)
+    radius: width / 2
+    color: root.eyeColor
+    antialiasing: true
+    rotation: root.tilt
+    x: head.width / 2 + (rx + root.gazeX) * (head.width / 2) - width / 2
+    y: head.height / 2 + (ry + root.gazeY) * (head.height / 2) - height / 2
   }
 }
