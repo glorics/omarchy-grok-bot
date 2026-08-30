@@ -43,30 +43,22 @@ Panel {
     } else {
       rows.push({
         id: "install",
-        label: "Install Linux client",
+        label: "Get Grok Bot",
         hint: "Enter",
-        run: function() { grok.openReleases(); root.close() }
+        run: function() { grok.openProduct(); root.close() }
       })
     }
     rows.push({
       id: "check",
-      label: "Check for updates",
+      label: "Updates are in-app",
       hint: "U",
       run: function() { grok.checkForUpdates() }
     })
-    if (grok.canSelfUpdate && grok.updateAvailable) {
-      rows.push({
-        id: "update",
-        label: grok.updating ? "Updating…" : "Update now",
-        hint: "Shift+U",
-        run: function() { grok.updateNow() }
-      })
-    }
     rows.push({
-      id: "github",
-      label: "Open GitHub",
+      id: "product",
+      label: "Open x.ai/bot",
       hint: "G",
-      run: function() { grok.openGitHub(); root.close() }
+      run: function() { grok.openProduct(); root.close() }
     })
     return rows
   }
@@ -174,9 +166,8 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
         if (t === "r" || t === "R") grok.refresh(false)
-        else if (t === "u") grok.checkForUpdates()
-        else if (t === "U") grok.updateNow()
-        else if (t === "g" || t === "G") { grok.openGitHub(); root.close() }
+        else if (t === "u" || t === "U") grok.checkForUpdates()
+        else if (t === "g" || t === "G") { grok.openProduct(); root.close() }
       }
 
       Flickable {
@@ -235,7 +226,7 @@ Panel {
           }
 
           BorderSurface {
-            visible: grok.crashed || !grok.installed || (grok.source === "package" && grok.updateAvailable)
+            visible: grok.crashed || !grok.installed
             width: parent.width
             implicitHeight: statusText.implicitHeight + Style.spacing.xl * 2
             color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.10)
@@ -251,9 +242,7 @@ Panel {
               anchors.rightMargin: Style.space(12)
               text: grok.crashed
                 ? "The last session ended unexpectedly. Open Grok Bot to start a new one."
-                : (!grok.installed
-                  ? "Install the unofficial Linux client, then this widget can launch it."
-                  : "Omarchy's grok-bot package is older than the unofficial AppImage on GitHub.")
+                : "Install the official Linux AppImage, then this widget can launch it."
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
@@ -269,11 +258,6 @@ Panel {
               visible: grok.appVersion !== "" || grok.installedVersion !== ""
               label: "Version"
               value: grok.appVersion || grok.installedVersion
-            }
-            InfoPair {
-              visible: grok.latestVersion !== ""
-              label: "GitHub"
-              value: grok.latestVersion + (grok.updateAvailable ? " · newer" : " · latest")
             }
             InfoPair { label: "Source"; value: grok.sourceLabel }
           }
@@ -300,7 +284,7 @@ Panel {
           Text {
             width: parent.width
             topPadding: Style.space(2)
-            text: "Unofficial Linux client · glorics/grok-bot-linux"
+            text: "Official Linux client · Cursor CDN"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

@@ -25,8 +25,9 @@ Item {
   property string appImage: ""
   property string launchCommand: ""
   property string focusPattern: "grok-bot"
-  property string githubUrl: "https://github.com/glorics/grok-bot-linux"
-  property string releasesUrl: "https://github.com/glorics/grok-bot-linux/releases"
+  property string githubUrl: "https://github.com/glorics/omarchy-grok-bot"
+  property string releasesUrl: "https://x.ai/bot"
+  property string productUrl: "https://x.ai/bot"
   property string actionStatus: ""
   property string lastError: ""
 
@@ -73,8 +74,9 @@ Item {
   }
 
   function checkForUpdates() {
-    actionStatus = "Checking GitHub…"
-    refresh(true)
+    actionStatus = "Official client updates in-app"
+    refresh(false)
+    actionStatusTimer.restart()
   }
 
   function applyStatus(raw) {
@@ -103,6 +105,7 @@ Item {
     focusPattern = String(data.focusPattern || "grok-bot")
     githubUrl = String(data.githubUrl || githubUrl)
     releasesUrl = String(data.releasesUrl || releasesUrl)
+    productUrl = String(data.productUrl || productUrl)
     lastError = ""
   }
 
@@ -118,22 +121,21 @@ Item {
   }
 
   function updateNow() {
-    if (!canSelfUpdate || updateProcess.running) return
-    _updateOutput = ""
-    _updateError = ""
-    updating = true
-    actionStatus = "Updating from GitHub…"
-    var cmd = launcher !== "" ? launcher : "grok-bot"
-    updateProcess.command = [cmd, "--update-only"]
-    updateProcess.running = true
+    actionStatus = "Use Grok Bot → Settings → Check for Updates"
+    actionStatusTimer.restart()
+    if (installed) launch()
   }
 
   function openGitHub() {
     Quickshell.execDetached(["omarchy-launch-browser", githubUrl])
   }
 
+  function openProduct() {
+    Quickshell.execDetached(["omarchy-launch-browser", productUrl])
+  }
+
   function openReleases() {
-    Quickshell.execDetached(["omarchy-launch-browser", releasesUrl])
+    Quickshell.execDetached(["omarchy-launch-browser", releasesUrl || productUrl])
   }
 
   Timer {
@@ -170,10 +172,10 @@ Item {
       var stderr = String(statusStderr.text || root._statusError || "")
       if (exitCode === 0 && stdout.trim() !== "") {
         root.applyStatus(stdout)
-        if (root.actionStatus === "Checking GitHub…") {
-          root.actionStatus = root.updateAvailable
-            ? ("Update available · " + root.latestVersion)
-            : (root.latestVersion !== "" ? ("Up to date · " + root.appVersion) : "Checked GitHub")
+        if (root.actionStatus === "Official client updates in-app") {
+          root.actionStatus = root.appVersion !== ""
+            ? ("Official · " + root.appVersion + " · updates in-app")
+            : "Official client updates in-app"
           actionStatusTimer.restart()
         }
       } else {
