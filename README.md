@@ -14,7 +14,7 @@ Plugin id: `glorics.grok-bot`
 
 ## What it does
 
-- Bar icon: the [x.ai/bot](https://x.ai/bot) mascot — white circle, stadium eyes, blink, gaze drift, pointer follow; the panel face also gets the orbit rings
+- Bar icon: the real [x.ai/bot](https://x.ai/bot) `IconMark` (head path + 25 eye rings from production JS). Idle lerps frames 0/8, blink is frame 4. The panel also runs the official `orbit` overlay: five brand-colored dots on a 3D ellipse.
 - Left click: panel · right click: launch or focus · middle click: check Cursor's CDN for a newer Linux AppImage
 - Panel shows connected / window closed, whether you are signed in, and that the cloud computer stays on
 - Check for updates reads Cursor's official feed (same version as macOS/Windows). If a newer Linux AppImage is on the CDN, **Update now** downloads it. A desktop notification fires once per new version (also on the six-hour background check)

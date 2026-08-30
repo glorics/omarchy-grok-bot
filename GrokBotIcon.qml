@@ -19,6 +19,11 @@ Item {
   property real mix: 0
   property real blink: 0
   property real follow: 0
+  property real nowMs: 0
+
+  // Official overlay palette from x.ai/bot (1em52idajmaks.js).
+  readonly property var orbitColors: ["#f9705c", "#5b95f0", "#3fbe86", "#f5b13f", "#9a72ee"]
+  readonly property real headC: 114.2705
 
   readonly property bool awake: installed && !alarming
   readonly property real s: width / 259
@@ -125,21 +130,40 @@ Item {
 
   Timer {
     interval: 33
-    running: hover.hovered && root.awake
+    running: root.awake
     repeat: true
     onTriggered: {
-      if (root.width <= 1) return
-      var nx = hover.point.position.x / root.width
-      root.follow = Math.max(-1, Math.min(1, (0.5 - nx) * 1.6))
+      root.nowMs = Date.now()
+      if (hover.hovered && root.width > 1) {
+        var nx = hover.point.position.x / root.width
+        root.follow = Math.max(-1, Math.min(1, (0.5 - nx) * 1.6))
+      } else {
+        root.follow = 0
+      }
     }
+  }
+
+  // Official orbit overlay (eB): 5 dots on a 3D ellipse, radius 52, y-squash 0.42.
+  Repeater {
+    model: 5
+    delegate: OrbitDot { slot: index; lag: 0 }
+  }
+  Repeater {
+    model: 5
+    delegate: OrbitDot { slot: index; lag: 0.28 }
+  }
+  Repeater {
+    model: 5
+    delegate: OrbitDot { slot: index; lag: 0.52 }
   }
 
   Shape {
     id: markShape
     width: 259
     height: 259
-    x: 15 * root.s
-    y: 15 * root.s
+    x: 15 * root.s + 2 * Math.sin(root.nowMs / 1000 * 0.4) * root.s
+    y: 15 * root.s + 1.5 * Math.sin(root.nowMs / 1000 * 0.3) * root.s
+    z: 2
     transformOrigin: Item.TopLeft
     scale: root.s
     preferredRendererType: Shape.CurveRenderer
@@ -160,5 +184,24 @@ Item {
       strokeWidth: 0
       PathSvg { path: root.eye1Path }
     }
+  }
+
+  component OrbitDot: Rectangle {
+    required property int slot
+    required property real lag
+    readonly property real ang: root.nowMs * 0.0017 + slot * Math.PI * 2 / 5 - lag
+    readonly property real facing: Math.cos(ang)
+    readonly property real lit: 0.5 + 0.5 * Math.max(0, Math.min(1, facing))
+    readonly property real pr: Math.max(12 * lit, 0.3)
+    x: (root.headC + 52 * Math.sin(ang) + 15) * root.s - width / 2
+    y: (root.headC - 0.42 * 52 * Math.cos(ang) + 15) * root.s - height / 2
+    width: Math.max(3.6, pr * root.s * 2)
+    height: width
+    radius: width / 2
+    color: root.orbitColors[slot % 5]
+    opacity: Math.max(0.18, Math.min(1, (facing + 0.4) / 0.6)) * (lag > 0.01 ? 0.38 : 1)
+    z: facing > 0 ? 3 : 0
+    visible: root.installed && root.width >= 18
+    antialiasing: true
   }
 }

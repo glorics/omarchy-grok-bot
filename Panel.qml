@@ -227,7 +227,7 @@ Panel {
             iconOpacity: grok.running || grok.alarming ? 1.0 : 0.7
             iconComponent: Component {
               GrokBotIcon {
-                iconSize: Style.font.display
+                iconSize: Style.space(44)
                 color: grok.crashed || grok.updateAvailable ? root.urgent : root.iconColor
                 running: grok.running
                 alarming: grok.alarming
