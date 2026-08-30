@@ -1,11 +1,11 @@
 import QtQuick
+import QtQuick.Shapes
+import Quickshell.Io
 import qs.Commons
 
-// x.ai/bot idle face (dark theme: light body, dark eye holes).
-// Positions are the official rest pose at radius 100, scaled to the icon:
-// inner  (21.42, -43.32), outer (62.98, -53.90), tilt \\ ~26°.
-// Animation is the same as the page: blink, gaze drift, pointer follow,
-// 0.5% breath. No float.
+// Real x.ai/bot mark: official HEAD path + 25 official eye rings from the
+// website JS (2wb8j23k0ritc.js). Idle lerps expressions 0 and 8; blink
+// flashes expression 4. Same viewBox, same lerpRing as production.
 Item {
   id: root
 
@@ -15,8 +15,13 @@ Item {
   property bool alarming: false
   property bool installed: true
 
-  readonly property real radius: Math.max(4, width / 2 - Math.max(0.5, iconSize * 0.03))
+  property var mark: null
+  property real mix: 0
+  property real blink: 0
+  property real follow: 0
 
+  readonly property bool awake: installed && !alarming
+  readonly property real s: width / 259
   readonly property color bodyColor: {
     if (!installed)
       return Qt.rgba(color.r, color.g, color.b, 0.45)
@@ -27,47 +32,53 @@ Item {
   readonly property color eyeColor: {
     var l = 0.2126 * bodyColor.r + 0.7152 * bodyColor.g + 0.0722 * bodyColor.b
     if (l > 0.5)
-      return Qt.rgba(0.08, 0.08, 0.09, 1)
+      return Qt.rgba(0.09, 0.09, 0.10, 1)
     return Qt.rgba(0.98, 0.98, 0.98, 1)
   }
 
-  property real t: 0
-  property real followX: 0
-  property real followY: 0
-  property real followMix: 0
+  readonly property string headPath: mark && mark.head ? mark.head : fallbackHead
+  readonly property string eye0Path: ringPath(eyeRing(0))
+  readonly property string eye1Path: ringPath(eyeRing(1))
 
-  readonly property bool awake: installed && !alarming
-  readonly property real wander: followMix > 0.4 ? 0.12 : (running ? 1.0 : 0.75)
+  // Official idle head (blob). Used until JSON loads.
+  readonly property string fallbackHead: "M228.541 114.228C228.541 130.133 225.184 145.994 218.738 160.534C212.674 174.217 203.904 186.669 193.065 196.988C155.933 232.34 99.497 238.596 55.5255 212.24C45.097 205.99 35.6851 198.072 27.7451 188.866C19.1926 178.953 12.3686 167.569 7.65781 155.351C2.60712 142.264 0 128.257 0 114.228C0 98.3219 3.35751 82.4611 9.80315 67.9215C15.8672 54.2382 24.6377 41.7862 35.4767 31.4668C72.6081 -3.88483 129.044 -10.1413 173.016 16.2153C183.444 22.4653 192.856 30.3829 200.796 39.5896C209.349 49.5018 216.173 60.8859 220.883 73.1037C225.934 86.1906 228.541 100.198 228.541 114.228Z"
 
-  readonly property real driftX: awake ? (Math.sin(t / 3.7 + 2.1) * 0.035 + Math.sin(t / 11.3) * 0.02) * wander : 0
-  readonly property real driftY: awake ? (Math.sin(t / 4.3 + 0.7) * 0.028 + Math.sin(t / 9.1 + 1.3) * 0.018) * wander : 0
-  readonly property real gazeX: driftX + followX * followMix
-  readonly property real gazeY: driftY + followY * followMix
-  readonly property real breath: awake ? 1 + Math.sin(t / 3.4 * Math.PI * 2) * 0.005 : 1
-  readonly property real lid: awake ? blinkLidAt(t) : (installed ? 0.40 : 0.14)
-  readonly property real tilt: -26
-
-  function blinkLidAt(time) {
-    var period = 3.15
-    var local = time % period
-    var k
-    if (local >= 0 && local <= 0.18) {
-      k = local / 0.18
-      return k < 0.45 ? 1 - k / 0.45 : (k - 0.45) / 0.55
-    }
-    var n = Math.floor(time / period)
-    if (n % 5 === 0 && local >= 0.42 && local <= 0.60) {
-      k = (local - 0.42) / 0.18
-      return k < 0.45 ? 1 - k / 0.45 : (k - 0.45) / 0.55
-    }
-    return 1
+  function ringPath(pts) {
+    if (!pts || pts.length < 2) return ""
+    var d = "M" + Number(pts[0][0]).toFixed(2) + " " + Number(pts[0][1]).toFixed(2)
+    for (var i = 1; i < pts.length; i++)
+      d += "L" + Number(pts[i][0]).toFixed(2) + " " + Number(pts[i][1]).toFixed(2)
+    return d + "Z"
   }
 
-  function followFrom(px, py) {
-    if (width <= 1 || height <= 1) return
-    followX = Math.max(-0.22, Math.min(0.22, (px / width - 0.5) * 0.44))
-    followY = Math.max(-0.18, Math.min(0.18, (py / height - 0.5) * 0.36))
-    followMix = 1
+  function lerpRing(a, b, t) {
+    if (!a || !b) return a || b || []
+    var n = Math.min(a.length, b.length)
+    var out = []
+    for (var i = 0; i < n; i++) {
+      out.push([
+        a[i][0] + (b[i][0] - a[i][0]) * t,
+        a[i][1] + (b[i][1] - a[i][1]) * t
+      ])
+    }
+    return out
+  }
+
+  function expr(id) {
+    if (!mark || !mark.expressions) return null
+    var i = Math.max(0, Math.min(mark.expressions.length - 1, id))
+    return mark.expressions[i]
+  }
+
+  function eyeRing(which) {
+    var a = expr(0)
+    var b = expr(8)
+    var c = expr(4)
+    if (!a) return []
+    var look = lerpRing(a[which], b ? b[which] : a[which], Math.max(0, Math.min(1, mix * 0.72 + follow * 0.55)))
+    if (c && blink > 0.01)
+      look = lerpRing(look, c[which], blink)
+    return look
   }
 
   width: iconSize
@@ -75,114 +86,79 @@ Item {
   implicitWidth: iconSize
   implicitHeight: iconSize
 
-  Component.onCompleted: t = Date.now() / 1000
-
-  Timer {
-    interval: 33
-    running: root.awake
-    repeat: true
-    onTriggered: {
-      root.t = Date.now() / 1000
-      if (hover.hovered)
-        root.followFrom(hover.point.position.x, hover.point.position.y)
-      else
-        root.followMix = 0
+  FileView {
+    id: markFile
+    path: decodeURIComponent(Qt.resolvedUrl("official-mark.json").toString().replace(/^file:\/\//, ""))
+    printErrors: false
+    onLoaded: {
+      try { root.mark = JSON.parse(markFile.text()) }
+      catch (e) { }
     }
   }
 
-  Behavior on followX { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
-  Behavior on followY { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
-  Behavior on followMix { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
+  SequentialAnimation {
+    running: root.awake && root.mark
+    loops: Animation.Infinite
+    PauseAnimation { duration: 2600 }
+    NumberAnimation { target: root; property: "mix"; to: 1; duration: 700; easing.type: Easing.InOutCubic }
+    PauseAnimation { duration: 2600 }
+    NumberAnimation { target: root; property: "mix"; to: 0; duration: 700; easing.type: Easing.InOutCubic }
+  }
+
+  SequentialAnimation {
+    running: root.awake && root.mark
+    loops: Animation.Infinite
+    PauseAnimation { duration: 2970 }
+    NumberAnimation { target: root; property: "blink"; to: 1; duration: 80; easing.type: Easing.OutQuad }
+    NumberAnimation { target: root; property: "blink"; to: 0; duration: 100; easing.type: Easing.OutCubic }
+    PauseAnimation { duration: 240 }
+    NumberAnimation { target: root; property: "blink"; to: 1; duration: 80; easing.type: Easing.OutQuad }
+    NumberAnimation { target: root; property: "blink"; to: 0; duration: 110; easing.type: Easing.OutCubic }
+    PauseAnimation { duration: 9800 }
+  }
 
   HoverHandler {
     id: hover
     enabled: root.awake
+    onHoveredChanged: if (!hovered) root.follow = 0
   }
 
-  property real orbit: 0
-  SequentialAnimation on orbit {
-    running: root.installed && !root.alarming
-    loops: Animation.Infinite
-    NumberAnimation { from: 0; to: 360; duration: 14000; easing.type: Easing.Linear }
-  }
-
-  Item {
-    anchors.centerIn: parent
-    width: root.radius * 2
-    height: root.radius * 2 * root.breath
-
-    Orbit {
-      hue: Qt.rgba(0.96, 0.55, 0.70, 0.9)
-      tilt: 28
-      spin: root.orbit
-      fat: 1.42
-    }
-    Orbit {
-      hue: Qt.rgba(0.98, 0.72, 0.48, 0.85)
-      tilt: -18
-      spin: -root.orbit * 0.85
-      fat: 1.28
-    }
-    Orbit {
-      hue: Qt.rgba(0.45, 0.82, 0.86, 0.88)
-      tilt: 52
-      spin: root.orbit * 1.1 + 40
-      fat: 1.18
-    }
-
-    Rectangle {
-      id: head
-      anchors.fill: parent
-      radius: width / 2
-      color: root.bodyColor
-      antialiasing: true
-      clip: true
-      z: 2
-
-      Eye {
-        rx: 0.2142
-        ry: -0.4332
-        squeeze: 0.87
-      }
-      Eye {
-        rx: 0.6298
-        ry: -0.5390
-        squeeze: 0.64
-      }
+  Timer {
+    interval: 33
+    running: hover.hovered && root.awake
+    repeat: true
+    onTriggered: {
+      if (root.width <= 1) return
+      var nx = hover.point.position.x / root.width
+      root.follow = Math.max(-1, Math.min(1, (0.5 - nx) * 1.6))
     }
   }
 
-  component Orbit: Rectangle {
-    property color hue: "white"
-    property real tilt: 0
-    property real spin: 0
-    property real fat: 1.3
-    visible: root.installed && root.width >= 20
-    opacity: root.running ? 1 : 0.7
-    anchors.centerIn: parent
-    width: parent.width * fat
-    height: parent.height * 0.42
-    radius: height / 2
-    color: "transparent"
-    border.color: hue
-    border.width: Math.max(1.4, parent.width * 0.04)
-    rotation: tilt + spin
+  Shape {
+    id: markShape
+    width: 259
+    height: 259
+    x: 15 * root.s
+    y: 15 * root.s
+    transformOrigin: Item.TopLeft
+    scale: root.s
+    preferredRendererType: Shape.CurveRenderer
     antialiasing: true
-    z: 1
-  }
 
-  component Eye: Rectangle {
-    property real rx: 0
-    property real ry: 0
-    property real squeeze: 1
-
-    width: Math.max(2.6, head.width * 0.145 * squeeze)
-    height: Math.max(4.2, head.height * 0.32 * root.lid)
-    radius: width / 2
-    color: root.eyeColor
-    antialiasing: true
-    rotation: root.tilt
-    x: head.width / 2 + (rx + root.gazeX) * (head.width / 2) - width / 2
-    y: head.height / 2 + (ry + root.gazeY) * (head.height / 2) - height / 2
+    ShapePath {
+      fillColor: root.bodyColor
+      strokeWidth: 0
+      PathSvg { path: root.headPath }
+    }
+    ShapePath {
+      fillColor: root.eyeColor
+      strokeWidth: 0
+      PathSvg { path: root.eye0Path }
+    }
+    ShapePath {
+      fillColor: root.eyeColor
+      strokeWidth: 0
+      PathSvg { path: root.eye1Path }
+    }
   }
 }
