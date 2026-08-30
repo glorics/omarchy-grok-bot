@@ -14,7 +14,7 @@ Plugin id: `glorics.grok-bot`
 
 ## What it does
 
-- Bar icon: the official white sphere with two dark stadium eyes on the right; it blinks while the client is open
+- Bar icon: the [x.ai/bot](https://x.ai/bot) mascot — a circle with stadium eyes on a sphere, gaze drift, blink, and pointer follow
 - Left click: panel · right click: launch or focus · middle click: check Cursor's CDN for a newer Linux AppImage
 - Panel shows connected / window closed, whether you are signed in, and that the cloud computer stays on
 - Check for updates reads Cursor's official feed (same version as macOS/Windows). If a newer Linux AppImage is on the CDN, **Update now** downloads it. A desktop notification fires once per new version (also on the six-hour background check)
