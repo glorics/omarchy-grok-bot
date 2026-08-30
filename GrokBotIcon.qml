@@ -29,17 +29,14 @@ Item {
   readonly property real s: width / 259
   readonly property color bodyColor: {
     if (!installed)
-      return Qt.rgba(color.r, color.g, color.b, 0.45)
+      return Qt.rgba(0.78, 0.79, 0.80, 1)
     if (alarming)
-      return Qt.rgba(Math.min(1, color.r + 0.04), Math.max(0, color.g - 0.04), Math.max(0, color.b - 0.06), 1)
-    return color
+      return Qt.rgba(0.97, 0.90, 0.88, 1)
+    if (running)
+      return Qt.rgba(0.96, 0.96, 0.97, 1)
+    return Qt.rgba(0.90, 0.91, 0.92, 1)
   }
-  readonly property color eyeColor: {
-    var l = 0.2126 * bodyColor.r + 0.7152 * bodyColor.g + 0.0722 * bodyColor.b
-    if (l > 0.5)
-      return Qt.rgba(0.09, 0.09, 0.10, 1)
-    return Qt.rgba(0.98, 0.98, 0.98, 1)
-  }
+  readonly property color eyeColor: Qt.rgba(0.09, 0.09, 0.10, 1)
 
   readonly property string headPath: mark && mark.head ? mark.head : fallbackHead
   readonly property string eye0Path: ringPath(eyeRing(0))
