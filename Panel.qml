@@ -14,11 +14,21 @@ Panel {
   property int actionIndex: 0
   property bool cursorActive: false
   property int phraseIndex: 0
+  // Hero lines are product facts, not telemetry. This widget only knows
+  // whether the Linux client window is open. Bots still run on the cloud
+  // computer when the window is closed.
   readonly property var livePhrases: [
-    "On the box",
     "Cloud computer",
-    "Holding sand",
-    "Remote"
+    "Remote control",
+    "AI teammates",
+    "Always on",
+    "Their computer",
+    "Shared computer"
+  ]
+  readonly property var idlePhrases: [
+    "Window closed",
+    "Still on",
+    "Bots keep going"
   ]
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
@@ -49,12 +59,6 @@ Panel {
       })
     }
     rows.push({
-      id: "check",
-      label: "Updates are in-app",
-      hint: "U",
-      run: function() { grok.checkForUpdates() }
-    })
-    rows.push({
       id: "product",
       label: "Open x.ai/bot",
       hint: "G",
@@ -74,12 +78,19 @@ Panel {
     selectedAction.run()
   }
 
+  function phraseList() {
+    if (grok.running) return livePhrases
+    if (grok.installed && !grok.crashed) return idlePhrases
+    return []
+  }
+
   function heroMeta() {
     if (grok.updating) return "Updating"
-    if (grok.crashed) return "Crashed"
+    if (grok.crashed) return "Client crashed"
     if (grok.updateAvailable) return "Update available"
-    if (grok.running) return livePhrases[phraseIndex % livePhrases.length]
-    if (grok.installed) return "Idle"
+    var phrases = phraseList()
+    if (phrases.length > 0)
+      return phrases[phraseIndex % phrases.length]
     return "Not installed"
   }
 
@@ -94,6 +105,7 @@ Panel {
   onOpenedChanged: if (opened) {
     cursorActive = false
     actionIndex = 0
+    phraseIndex = 0
     if (panelFlick) panelFlick.contentY = 0
     grok.refresh(false)
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
@@ -103,6 +115,7 @@ Panel {
   Service {
     id: grok
     settings: root.settings
+    onRunningChanged: root.phraseIndex = 0
   }
 
   IpcHandler {
@@ -137,9 +150,10 @@ Panel {
       }
     }
     onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton) grok.launch()
-      else if (buttonCode === Qt.MiddleButton) grok.checkForUpdates()
-      else root.toggle()
+      if (buttonCode === Qt.RightButton || buttonCode === Qt.MiddleButton)
+        grok.launch()
+      else
+        root.toggle()
     }
   }
 
@@ -166,7 +180,6 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
         if (t === "r" || t === "R") grok.refresh(false)
-        else if (t === "u" || t === "U") grok.checkForUpdates()
         else if (t === "g" || t === "G") { grok.openProduct(); root.close() }
       }
 
@@ -284,7 +297,7 @@ Panel {
           Text {
             width: parent.width
             topPadding: Style.space(2)
-            text: "Official Linux client · Cursor CDN"
+            text: "Official Linux client · updates in the app"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -298,8 +311,8 @@ Panel {
 
   Timer {
     id: phraseTimer
-    interval: 2800
-    running: root.opened && grok.running && !grok.alarming && !grok.updating
+    interval: 3200
+    running: root.opened && grok.installed && !grok.crashed && !grok.updating
     repeat: true
     onTriggered: phraseSwap.restart()
   }
@@ -314,7 +327,10 @@ Panel {
       easing.type: Easing.OutQuad
     }
     ScriptAction {
-      script: root.phraseIndex = (root.phraseIndex + 1) % root.livePhrases.length
+      script: {
+        var n = root.phraseList().length
+        root.phraseIndex = n > 0 ? (root.phraseIndex + 1) % n : 0
+      }
     }
     PropertyAnimation {
       target: hero

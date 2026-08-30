@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "glorics.grok-bot",
   "name": "Grok Bot",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "author": "glorics",
   "license": "MIT",
-  "description": "Launch and focus the official Grok Bot Linux client from the Omarchy bar. The mark looks around and blinks while the box is live.",
+  "description": "Launch and focus the official Grok Bot Linux client from the Omarchy bar. The mark looks around and blinks while the client is open.",
   "kinds": ["bar-widget"],
   "activation": "on-demand",
   "entryPoints": {

@@ -109,12 +109,13 @@ def hypr_window() -> dict:
     except json.JSONDecodeError:
         return {}
     for client in clients or []:
-        klass = str(client.get("class") or "")
+        klass = str(client.get("class") or "").lower()
         title = str(client.get("title") or "")
-        blob = f"{klass} {title}".lower()
-        if "grok-bot" in blob or klass.lower() == "sand" or "grok bot" in blob:
+        # Match the desktop client only. Do not scan titles: a terminal
+        # running `grok` or a chat about Grok Bot would otherwise count.
+        if klass in ("grok-bot", "sand"):
             return {
-                "class": klass,
+                "class": str(client.get("class") or ""),
                 "title": title,
                 "pid": int(client.get("pid") or 0),
             }
@@ -198,9 +199,9 @@ def status() -> dict:
     elif crashed:
         status_text = "Crashed"
     elif running:
-        status_text = "Running"
+        status_text = "Connected"
     else:
-        status_text = "Idle"
+        status_text = "Window closed"
 
     version = app_version or installed_version or pkg
 

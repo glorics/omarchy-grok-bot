@@ -14,10 +14,12 @@ Plugin id: `glorics.grok-bot`
 
 ## What it does
 
-- Bar icon for the official Linux client — glossy orb, official-style eyes that glance around and blink while the box is running
-- Left click: panel · right click: launch or focus
-- Panel shows running / idle / crashed and the installed version
-- Updates come from the app itself (Settings → Check for Updates), not from GitHub
+- Bar icon for the official Linux client — glossy orb, official-style eyes that glance around and blink while the client is open
+- Left click: panel · right or middle click: launch or focus
+- Panel shows connected / window closed / crashed and the installed version
+- While the client is open, the subtitle rotates through what Grok Bot actually is: cloud computer, remote control, AI teammates, always on
+- While the window is closed, it says so — the cloud computer keeps running
+- Updates come from the app itself (Settings → Check for Updates), not from this plugin
 
 It does **not** list bots, open chats, or read Electron state beyond the
 session marker the client already writes.
@@ -54,8 +56,7 @@ does not appear.
 | Input | Action |
 |---|---|
 | Left click / Enter | Open the selected row (Open / Focus by default) |
-| Right click | Launch or focus Grok Bot |
-| `u` | Remind that updates are in-app |
+| Right or middle click | Launch or focus Grok Bot |
 | `r` | Refresh status |
 | `g` | Open [x.ai/bot](https://x.ai/bot) |
 | `j` / `k` or arrows | Move between actions |
