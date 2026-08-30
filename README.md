@@ -3,7 +3,9 @@
 [![Release](https://img.shields.io/github/v/release/glorics/omarchy-grok-bot)](https://github.com/glorics/omarchy-grok-bot/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The official [x.ai/bot](https://x.ai/bot) on the Omarchy bar. Official Linux client. Community plugin by **glorics**.
+Unofficial community bar widget by **glorics**. It launches the [Grok Bot](https://x.ai/bot) Linux client from the Omarchy bar: themed face, one click to open, **Connected** or **Window closed**.
+
+This plugin is **not** Grok Bot, and it is **not** an xAI or Cursor product.
 
 <p align="center">
   <video src="docs/widget-demo.mp4" width="400" controls muted loop playsinline></video>
@@ -11,16 +13,21 @@ The official [x.ai/bot](https://x.ai/bot) on the Omarchy bar. Official Linux cli
 </p>
 
 <p align="center">
-  <img src="preview.png" alt="Grok Bot on Omarchy" width="360">
+  <img src="preview.png" alt="Grok Bot community widget on Omarchy" width="360">
 </p>
 
-## Marketplace
+## What it does
 
-This plugin is a **candidate** on the [Omarchy Plugin Marketplace](https://github.com/omacom/omarchy-plugin-marketplace/issues/3539).
+- Puts a themed x.ai/bot face on the Omarchy bar
+- Opens or focuses the Grok Bot Linux client
+- Shows whether the window is open
+- Can check Cursor's update feed and download a newer Linux AppImage into `~/Applications` when you ask it to
 
-Automated review is complete. It is Quattro-compatible, the security baseline passed, and it is **ready to be listed**. Author credit is `glorics`.
+It does not read Grok Bot tokens, chats, or secret files.
 
-It is **not** Grok Bot, and it is **not** an xAI or Cursor product. It is the Omarchy face for the official Linux client: the mark on the bar, one click to open, **Connected** or **Window closed**.
+## External dependency
+
+The [Grok Bot Linux client](https://x.ai/bot) (AppImage). Install it yourself, or use **Check for updates** / **Update now** in the panel. Updates download from `downloads.cursor.com` into `~/Applications`. Removing the plugin does not remove the AppImage.
 
 ## Install
 
@@ -34,6 +41,10 @@ omarchy plugin add https://github.com/glorics/omarchy-grok-bot.git --enable
 omarchy plugin remove glorics.grok-bot
 ```
 
+## Marketplace
+
+Candidate listing: [omacom/omarchy-plugin-marketplace#3539](https://github.com/omacom/omarchy-plugin-marketplace/issues/3539).
+
 ## License
 
-MIT for this plugin. Grok Bot belongs to xAI / Cursor.
+MIT for this plugin only. Grok Bot, the x.ai/bot mark, and the Linux AppImage belong to xAI / Cursor.

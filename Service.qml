@@ -136,7 +136,7 @@ Item {
     _updateOutput = ""
     _updateError = ""
     updating = true
-    actionStatus = "Downloading official AppImage…"
+    actionStatus = "Downloading Linux AppImage…"
     updateProcess.command = ["python3", helperPath(), "--update"]
     updateProcess.running = true
   }

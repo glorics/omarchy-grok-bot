@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Local status for the official Grok Bot Linux client.
+"""Local status for the Grok Bot Linux client.
 
 Cheap path (default): local files and Hyprland. Does not touch the network.
 `--fetch` asks Cursor's update API what the current Grok Bot version is, then
-looks for a Linux AppImage of that version on the official CDN.
+looks for a Linux AppImage of that version on the Cursor CDN.
 `--update` downloads that AppImage when one is newer than the install.
+
+Does not read Grok Bot tokens, chats, or secret files.
 """
 
 from __future__ import annotations
@@ -29,8 +31,13 @@ APPIMAGE = Path(
     )
 )
 APPS = Path(os.environ.get("GROKBOT_APPS", str(HOME / "Applications")))
-SECRETS_FILE = HOME / ".config" / "Grok Bot" / "sand-secrets.json"
-MARKER_FILE = HOME / ".config" / "Grok Bot" / "sand-session-marker.json"
+CONFIG_DIR = HOME / ".config" / "Grok Bot"
+MARKER_FILE = CONFIG_DIR / "sand-session-marker.json"
+SESSION_HINTS = (
+    MARKER_FILE,
+    CONFIG_DIR / "window-state.json",
+    CONFIG_DIR / "gateway-descriptor.json",
+)
 PRODUCT_URL = "https://x.ai/bot"
 PLUGIN_URL = f"https://github.com/{PLUGIN_REPO}"
 DARWIN_PROBE = (
@@ -404,7 +411,7 @@ def status() -> dict:
         launcher.endswith("/.local/bin/grok-bot") and state
     ):
         source = "official"
-        source_label = "Official AppImage"
+        source_label = "Linux AppImage"
         if not installed_version:
             installed_version = app_version
     elif pkg:
@@ -463,7 +470,7 @@ def status() -> dict:
     else:
         status_text = "Window closed"
 
-    signed_in = SECRETS_FILE.exists()
+    signed_in = any(path.exists() for path in SESSION_HINTS)
     update_available = bool(latest and version and version_newer(latest, version))
     can_update = bool(update_available and linux_latest)
 

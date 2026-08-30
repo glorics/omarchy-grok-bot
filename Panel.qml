@@ -273,7 +273,7 @@ Panel {
               text: grok.crashed
                 ? "The last session ended unexpectedly. Open Grok Bot to start a new one."
                 : (!grok.installed
-                  ? "Install the official Linux AppImage, then this widget can launch it."
+                  ? "Install the Grok Bot Linux AppImage, then this widget can launch it."
                   : ("Grok Bot " + grok.latestVersion + " is on the Cursor CDN."))
               color: root.dim
               font.family: root.fontFamily
@@ -328,7 +328,7 @@ Panel {
           Text {
             width: parent.width
             topPadding: Style.space(2)
-            text: "Official Linux client · Cursor CDN"
+            text: "Community plugin · Linux AppImage"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

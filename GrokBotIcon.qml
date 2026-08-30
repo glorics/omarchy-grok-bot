@@ -3,9 +3,9 @@ import QtQuick.Shapes
 import Quickshell.Io
 import qs.Commons
 
-// Official x.ai/bot IconMark face. Expression table, blink squash, and
-// per-state body motion come from 1em52idajmaks.js. Overlay morphs (orbit,
-// radar, pencil, …) stay off — they do not read at bar/panel size.
+// Themed x.ai/bot IconMark face. Expression table, blink squash, and
+// per-state body motion follow the public site animation. Overlay morphs
+// (orbit, radar, pencil, …) stay off — they do not read at bar/panel size.
 Item {
   id: root
 
@@ -40,8 +40,8 @@ Item {
   readonly property color bodyColor: root.color
   readonly property color eyeColor: Color.background
 
-  // Official face states (m / E in production). Stay is shorter than the
-  // site so the orb actually shows the catalog instead of sitting on idle.
+  // Public face states. Stay is shorter than the site so the orb actually
+  // shows the catalog instead of sitting on idle.
   readonly property var catalog: [
     { name: "humming", frames: [0, 8], hold: [2800, 5000], stay: [4500, 7000], blink: true },
     { name: "idle", frames: [0, 8], hold: [2800, 4800], stay: [4500, 7000], blink: true },

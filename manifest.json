@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "glorics.grok-bot",
   "name": "Grok Bot",
-  "version": "1.11.3",
+  "version": "1.12.0",
   "author": "glorics",
   "license": "MIT",
-  "description": "Launch and focus the official Grok Bot Linux client from the Omarchy bar. Full x.ai/bot face catalog; status and CDN updates.",
+  "description": "Unofficial Omarchy bar widget for the Grok Bot Linux client. Themed x.ai/bot face, launch/focus, status, and optional Cursor CDN updates.",
   "kinds": ["bar-widget"],
   "activation": "on-demand",
   "entryPoints": {
@@ -13,9 +13,9 @@
   },
   "barWidget": {
     "displayName": "Grok Bot",
-    "description": "One bar icon: the themed x.ai/bot mascot, client status, CDN updates, and an update notification.",
+    "description": "One bar icon: themed x.ai/bot mascot, client status, and optional CDN updates.",
     "category": "AI",
-    "aliases": ["grok-bot", "grokbot", "cockbot"],
+    "aliases": ["grok-bot", "grokbot"],
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
