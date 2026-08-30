@@ -26,9 +26,9 @@ Panel {
     "Shared computer"
   ]
   readonly property var idlePhrases: [
-    "Window closed",
     "Still on",
-    "Bots keep going"
+    "Bots keep going",
+    "Computer's up"
   ]
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
