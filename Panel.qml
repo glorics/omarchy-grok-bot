@@ -227,7 +227,7 @@ Panel {
             iconOpacity: grok.installed ? 1.0 : 0.55
             iconComponent: Component {
               GrokBotIcon {
-                iconSize: Style.space(52)
+                iconSize: Style.space(42)
                 color: root.iconColor
                 running: grok.running
                 alarming: grok.alarming
