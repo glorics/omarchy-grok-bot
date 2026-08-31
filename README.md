@@ -45,6 +45,14 @@ omarchy plugin remove glorics.grok-bot
 
 Candidate listing: [omacom/omarchy-plugin-marketplace#3539](https://github.com/omacom/omarchy-plugin-marketplace/issues/3539).
 
+## Also by glorics
+
+[Proton VPN for Omarchy](https://github.com/glorics/omarchy-proton-vpn) — unofficial bar plugin: exit IP, map, Fastest / P2P / Secure Core / Tor. Official `protonvpn` CLI.
+
+```bash
+omarchy plugin add https://github.com/glorics/omarchy-proton-vpn.git --enable
+```
+
 ## License
 
 MIT for this plugin only. Grok Bot, the x.ai/bot mark, and the Linux AppImage belong to xAI / Cursor.
