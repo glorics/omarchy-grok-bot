@@ -15,8 +15,10 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -61,13 +63,102 @@ LINUX_BY_VERSION = {
 OFFICIAL_APPIMAGE_URL = LINUX_BY_VERSION["0.30.0"]
 STALE_AFTER_MS = 45_000
 VERSION_RE = re.compile(r"Grok_Bot_(\d+\.\d+\.\d+)")
+MAX_PROC_BYTES = 64 * 1024
+MAX_FILE_BYTES = 64 * 1024
+MAX_HYPR_BYTES = 1024 * 1024
+MAX_STDOUT_BYTES = 256 * 1024
+MAX_FIELD = 96
+
+
+def clip(value, n: int = MAX_FIELD) -> str:
+    text = str(value or "")
+    return text if len(text) <= n else text[:n]
+
+
+def cap_text(value: str, n: int = MAX_PROC_BYTES) -> str:
+    text = value or ""
+    return text if len(text) <= n else text[:n]
+
+
+def run(cmd: list[str], timeout: int = 8, max_bytes: int = MAX_PROC_BYTES) -> subprocess.CompletedProcess:
+    try:
+        proc = subprocess.run(
+            cmd, check=False, capture_output=True, text=True, timeout=timeout
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return subprocess.CompletedProcess(cmd, 1, "", str(exc))
+    proc.stdout = cap_text(proc.stdout or "", max_bytes)
+    proc.stderr = cap_text(proc.stderr or "", max_bytes)
+    return proc
+
+
+def emit(obj: dict) -> None:
+    raw = json.dumps(obj, ensure_ascii=True)
+    if len(raw.encode("utf-8")) > MAX_STDOUT_BYTES:
+        raw = json.dumps({"ok": False, "error": "Output too large"}, ensure_ascii=True)
+    sys.stdout.write(raw)
+
+
+def ensure_state_dir() -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(STATE_DIR, 0o700)
+
+
+def read_bounded(path: Path, max_bytes: int) -> bytes:
+    if path.is_symlink():
+        return b""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError:
+        return b""
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > max_bytes:
+            return b""
+        data = os.read(fd, max_bytes + 1)
+        if len(data) > max_bytes:
+            return b""
+        return data
+    finally:
+        os.close(fd)
+
+
+def atomic_write(path: Path, text: str) -> None:
+    ensure_state_dir()
+    data = text.encode("utf-8")
+    if len(data) > MAX_FILE_BYTES:
+        return
+    if path.is_symlink():
+        try:
+            path.unlink()
+        except OSError:
+            return
+    fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=str(STATE_DIR))
+    try:
+        os.write(fd, data)
+        os.fsync(fd)
+        os.close(fd)
+        fd = -1
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    except OSError:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
 
 
 def read_kv(path: Path) -> dict[str, str]:
     out: dict[str, str] = {}
+    raw = read_bounded(path, MAX_FILE_BYTES)
+    if not raw:
+        return out
     try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
+        text = raw.decode("utf-8")
+    except UnicodeError:
         return out
     for line in text.splitlines():
         if "=" not in line:
@@ -78,15 +169,18 @@ def read_kv(path: Path) -> dict[str, str]:
 
 
 def read_json(path: Path) -> dict:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    raw = read_bounded(path, MAX_FILE_BYTES)
+    if not raw:
         return {}
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def write_json(path: Path, data: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    atomic_write(path, json.dumps(data, indent=2) + "\n")
 
 
 def strip_v(value: str) -> str:
@@ -130,16 +224,7 @@ def which_grok_bot() -> str:
 
 
 def package_version() -> str:
-    try:
-        proc = subprocess.run(
-            ["pacman", "-Q", "grok-bot"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
+    proc = run(["pacman", "-Q", "grok-bot"], timeout=2)
     if proc.returncode != 0:
         return ""
     parts = proc.stdout.strip().split()
@@ -149,16 +234,7 @@ def package_version() -> str:
 
 
 def hypr_window() -> dict:
-    try:
-        proc = subprocess.run(
-            ["hyprctl", "clients", "-j"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return {}
+    proc = run(["hyprctl", "clients", "-j"], timeout=2, max_bytes=MAX_HYPR_BYTES)
     if proc.returncode != 0 or not proc.stdout.strip():
         return {}
     try:
@@ -171,7 +247,7 @@ def hypr_window() -> dict:
         if klass in ("grok-bot", "sand"):
             return {
                 "class": str(client.get("class") or ""),
-                "title": title,
+                "title": clip(title, 80),
                 "pid": int(client.get("pid") or 0),
             }
     return {}
@@ -184,53 +260,41 @@ def appimage_present() -> bool:
 
 
 def curl_headers(url: str, timeout: int = 12) -> str:
-    try:
-        proc = subprocess.run(
-            [
-                "curl",
-                "-sI",
-                "-L",
-                "--max-redirs",
-                "5",
-                "-A",
-                "Mozilla/5.0",
-                "--max-time",
-                str(timeout),
-                url,
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout + 2,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    return proc.stdout or ""
+    proc = run(
+        [
+            "curl",
+            "-sI",
+            "-L",
+            "--max-redirs",
+            "5",
+            "-A",
+            "Mozilla/5.0",
+            "--max-time",
+            str(timeout),
+            url,
+        ],
+        timeout=timeout + 2,
+    )
+    return cap_text(proc.stdout or "", MAX_PROC_BYTES)
 
 
 def head_ok(url: str) -> bool:
-    try:
-        proc = subprocess.run(
-            [
-                "curl",
-                "-sI",
-                "-o",
-                "/dev/null",
-                "-w",
-                "%{http_code}",
-                "-A",
-                "Mozilla/5.0",
-                "--max-time",
-                "10",
-                url,
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=12,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
+    proc = run(
+        [
+            "curl",
+            "-sI",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "-A",
+            "Mozilla/5.0",
+            "--max-time",
+            "10",
+            url,
+        ],
+        timeout=12,
+    )
     return proc.stdout.strip() == "200"
 
 
@@ -372,8 +436,8 @@ def do_update() -> int:
     if current.exists() or current.is_symlink():
         current.unlink()
     current.symlink_to(name)
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(
+    atomic_write(
+        STATE_FILE,
         "\n".join(
             [
                 f"tag={latest}",
@@ -383,8 +447,8 @@ def do_update() -> int:
                 f"url={linux}",
                 "",
             ]
-        ),
-        encoding="utf-8",
+        )
+        + "\n",
     )
     print(f"installed {latest}")
     return 0
@@ -483,10 +547,10 @@ def status() -> dict:
         "crashed": crashed,
         "pid": pid if running else 0,
         "windowClass": window.get("class") or focus,
-        "windowTitle": window.get("title") or "",
-        "installedVersion": installed_version or pkg,
-        "appVersion": version,
-        "latestVersion": latest,
+        "windowTitle": clip(window.get("title") or "", 80),
+        "installedVersion": clip(installed_version or pkg, 32),
+        "appVersion": clip(version, 32),
+        "latestVersion": clip(latest, 32),
         "updateAvailable": update_available,
         "canSelfUpdate": can_update,
         "linuxUpdateUrl": linux_latest if can_update else "",
@@ -514,7 +578,7 @@ def main() -> int:
         return do_update()
     if "--fetch" in args:
         fetch_latest()
-    print(json.dumps(status(), ensure_ascii=True))
+    emit(status())
     return 0
 
 

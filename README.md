@@ -21,9 +21,9 @@ This plugin is **not** Grok Bot, and it is **not** an xAI or Cursor product.
 - Puts a themed x.ai/bot face on the Omarchy bar
 - Opens or focuses the Grok Bot Linux client
 - Shows whether the window is open
-- Can check Cursor's update feed and download a newer Linux AppImage into `~/Applications` when you ask it to
+- Can check Cursor's update feed and download a newer Linux AppImage into `~/Applications` when you click **Check for updates** / **Update now**. There is no automatic download.
 
-It does not read Grok Bot tokens, chats, or secret files.
+It does not read Grok Bot tokens, chats, or secret files. Helper stdout and stderr are capped before QML collects them. Plugin state under `~/.grokbot` is mode 0700 and written atomically. Status strings render as plain text.
 
 ## External dependency
 

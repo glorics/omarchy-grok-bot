@@ -246,6 +246,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             visible: grok.actionStatus !== "" || grok.lastError !== ""
             width: parent.width
             text: grok.actionStatus !== "" ? grok.actionStatus : grok.lastError
@@ -264,6 +265,7 @@ Panel {
             radius: Style.cornerRadius
 
             Text {
+              textFormat: Text.PlainText
               id: statusText
               anchors.left: parent.left
               anchors.right: parent.right
@@ -326,6 +328,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             topPadding: Style.space(2)
             text: "Community plugin · Linux AppImage"
@@ -382,6 +385,7 @@ Panel {
     clip: true
 
     Text {
+      textFormat: Text.PlainText
       id: labelText
       anchors.left: parent.left
       anchors.verticalCenter: parent.verticalCenter
@@ -393,6 +397,7 @@ Panel {
       wrapMode: Text.NoWrap
     }
     Text {
+      textFormat: Text.PlainText
       id: valueText
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
@@ -435,6 +440,7 @@ Panel {
       spacing: Style.space(8)
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width - hint.implicitWidth - parent.spacing
         text: actionRow.action ? actionRow.action.label : ""
         color: root.foreground
@@ -445,6 +451,7 @@ Panel {
       }
 
       Text {
+        textFormat: Text.PlainText
         id: hint
         text: actionRow.action ? actionRow.action.hint : ""
         color: root.dim

@@ -61,6 +61,20 @@ Item {
     return decodeURIComponent(Qt.resolvedUrl("status.py").toString().replace(/^file:\/\//, ""))
   }
 
+  function capPath() {
+    return decodeURIComponent(Qt.resolvedUrl("bin/run-capped").toString().replace(/^file:\/\//, ""))
+  }
+
+  function capped(argv) {
+    return ["bash", capPath()].concat(argv)
+  }
+
+  function clip(value, n) {
+    var s = String(value || "")
+    n = n || 160
+    return s.length > n ? s.substring(0, n) : s
+  }
+
   function elideStatus(text) {
     var value = String(text || "").replace(/\s+/g, " ").trim()
     return value.length > 160 ? value.substring(0, 157) + "…" : value
@@ -73,7 +87,7 @@ Item {
     refreshing = true
     var command = ["python3", helperPath()]
     if (fetch) command.push("--fetch")
-    statusProcess.command = command
+    statusProcess.command = capped(command)
     statusProcess.running = true
   }
 
@@ -95,13 +109,13 @@ Item {
     crashed = data.crashed === true
     updateAvailable = data.updateAvailable === true
     canSelfUpdate = data.canSelfUpdate === true
-    source = String(data.source || "none")
-    sourceLabel = String(data.sourceLabel || "")
-    statusText = String(data.statusText || "")
-    appVersion = String(data.appVersion || "")
-    installedVersion = String(data.installedVersion || "")
-    latestVersion = String(data.latestVersion || "")
-    packageVersion = String(data.packageVersion || "")
+    source = clip(data.source || "none", 24)
+    sourceLabel = clip(data.sourceLabel || "", 64)
+    statusText = clip(data.statusText || "", 64)
+    appVersion = clip(data.appVersion || "", 32)
+    installedVersion = clip(data.installedVersion || "", 32)
+    latestVersion = clip(data.latestVersion || "", 32)
+    packageVersion = clip(data.packageVersion || "", 32)
     launcher = String(data.launcher || "")
     appImage = String(data.appImage || "")
     launchCommand = String(data.launchCommand || "")
@@ -109,10 +123,10 @@ Item {
     githubUrl = String(data.githubUrl || githubUrl)
     releasesUrl = String(data.releasesUrl || releasesUrl)
     productUrl = String(data.productUrl || productUrl)
-    computerLabel = String(data.computerLabel || "Always on")
+    computerLabel = clip(data.computerLabel || "Always on", 32)
     signedIn = data.signedIn === true
-    signedInLabel = String(data.signedInLabel || (signedIn ? "Yes" : "No"))
-    lastCheckText = String(data.lastCheckText || "")
+    signedInLabel = clip(data.signedInLabel || (signedIn ? "Yes" : "No"), 16)
+    lastCheckText = clip(data.lastCheckText || "", 24)
     lastError = ""
   }
 
@@ -137,7 +151,7 @@ Item {
     _updateError = ""
     updating = true
     actionStatus = "Downloading Linux AppImage…"
-    updateProcess.command = ["python3", helperPath(), "--update"]
+    updateProcess.command = capped(["python3", helperPath(), "--update"])
     updateProcess.running = true
   }
 
@@ -159,20 +173,6 @@ Item {
     running: true
     triggeredOnStart: true
     onTriggered: root.refresh(false)
-  }
-
-  Timer {
-    interval: 4000
-    repeat: false
-    running: true
-    onTriggered: root.refresh(true)
-  }
-
-  Timer {
-    interval: 21600000
-    repeat: true
-    running: true
-    onTriggered: root.refresh(true)
   }
 
   Timer {
@@ -234,7 +234,7 @@ Item {
         root.actionStatus = root.lastError
       }
       actionStatusTimer.restart()
-      root.refresh(true)
+      root.refresh(false)
     }
   }
 }

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Cap stdout and stderr before Quickshell's StdioCollector sees them.
+# StdioCollector has no size limit of its own.
+set -uo pipefail
+
+limit=${GLORICS_MAX_BYTES:-262144}
+
+if [ $# -eq 0 ]; then
+  echo "usage: run-capped COMMAND [ARG...]" >&2
+  exit 2
+fi
+
+exec 3> >(head -c "$limit" >&2)
+"$@" 2>&3 | head -c "$limit"
+rc=${PIPESTATUS[0]}
+exec 3>&-
+wait 2>/dev/null
+exit "$rc"
