@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "glorics.grok-bot",
   "name": "Grok Bot",
-  "version": "1.12.1",
+  "version": "1.12.2",
   "author": "glorics",
   "license": "MIT",
   "description": "Unofficial Omarchy bar widget for the Grok Bot Linux client. Themed x.ai/bot face, launch/focus, status, and optional Cursor CDN updates.",

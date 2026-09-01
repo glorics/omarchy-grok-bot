@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import select
 import shutil
 import stat
 import subprocess
@@ -75,21 +76,83 @@ def clip(value, n: int = MAX_FIELD) -> str:
     return text if len(text) <= n else text[:n]
 
 
-def cap_text(value: str, n: int = MAX_PROC_BYTES) -> str:
-    text = value or ""
-    return text if len(text) <= n else text[:n]
-
-
 def run(cmd: list[str], timeout: int = 8, max_bytes: int = MAX_PROC_BYTES) -> subprocess.CompletedProcess:
     try:
-        proc = subprocess.run(
-            cmd, check=False, capture_output=True, text=True, timeout=timeout
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except OSError as exc:
         return subprocess.CompletedProcess(cmd, 1, "", str(exc))
-    proc.stdout = cap_text(proc.stdout or "", max_bytes)
-    proc.stderr = cap_text(proc.stderr or "", max_bytes)
-    return proc
+
+    stdout = bytearray()
+    stderr = bytearray()
+    streams = {}
+    if proc.stdout:
+        streams[proc.stdout] = stdout
+    if proc.stderr:
+        streams[proc.stderr] = stderr
+    overflow = False
+    deadline = time.monotonic() + max(0.05, float(timeout))
+    try:
+        while streams:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                proc.kill()
+                break
+            ready, _, _ = select.select(list(streams), [], [], remaining)
+            if not ready:
+                proc.kill()
+                break
+            stop = False
+            for fh in ready:
+                buf = streams[fh]
+                try:
+                    chunk = os.read(fh.fileno(), 4096)
+                except OSError:
+                    chunk = b""
+                if not chunk:
+                    try:
+                        fh.close()
+                    except OSError:
+                        pass
+                    streams.pop(fh, None)
+                    continue
+                room = max_bytes - len(buf)
+                if room <= 0 or len(chunk) > room:
+                    if room > 0:
+                        buf.extend(chunk[:room])
+                    overflow = True
+                    proc.kill()
+                    stop = True
+                    break
+                buf.extend(chunk)
+            if stop:
+                break
+        try:
+            proc.wait(timeout=max(0.1, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=1)
+    finally:
+        for fh in (proc.stdout, proc.stderr):
+            if fh and not fh.closed:
+                try:
+                    fh.close()
+                except OSError:
+                    pass
+
+    code = proc.returncode if proc.returncode is not None else 1
+    if overflow and code == 0:
+        code = 1
+    return subprocess.CompletedProcess(
+        cmd,
+        code,
+        bytes(stdout).decode("utf-8", errors="replace"),
+        bytes(stderr).decode("utf-8", errors="replace"),
+    )
 
 
 def emit(obj: dict) -> None:
@@ -99,9 +162,51 @@ def emit(obj: dict) -> None:
     sys.stdout.write(raw)
 
 
-def ensure_state_dir() -> None:
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    os.chmod(STATE_DIR, 0o700)
+def ensure_private_dir(path: Path) -> bool:
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        st = None
+    except OSError:
+        return False
+    if st is not None:
+        if stat.S_ISLNK(st.st_mode):
+            try:
+                path.unlink()
+            except OSError:
+                return False
+        elif not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+            return False
+    if not path.exists():
+        parent = path.parent
+        if not parent.exists():
+            try:
+                parent.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                return False
+        try:
+            os.mkdir(path, 0o700)
+        except FileExistsError:
+            pass
+        except OSError:
+            return False
+    flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(str(path), flags)
+    except OSError:
+        return False
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+            return False
+        os.fchmod(fd, 0o700)
+        return True
+    finally:
+        os.close(fd)
+
+
+def ensure_state_dir() -> bool:
+    return ensure_private_dir(STATE_DIR)
 
 
 def read_bounded(path: Path, max_bytes: int) -> bytes:
@@ -125,30 +230,38 @@ def read_bounded(path: Path, max_bytes: int) -> bytes:
 
 
 def atomic_write(path: Path, text: str) -> None:
-    ensure_state_dir()
+    if not ensure_state_dir():
+        return
     data = text.encode("utf-8")
     if len(data) > MAX_FILE_BYTES:
         return
-    if path.is_symlink():
-        try:
-            path.unlink()
-        except OSError:
-            return
-    fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=str(STATE_DIR))
     try:
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            path.unlink()
+    except OSError:
+        return
+    fd = -1
+    tmp = ""
+    try:
+        fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=str(STATE_DIR))
         os.write(fd, data)
         os.fsync(fd)
+        os.fchmod(fd, 0o600)
         os.close(fd)
         fd = -1
-        os.chmod(tmp, 0o600)
         os.replace(tmp, path)
+        tmp = ""
     except OSError:
         if fd >= 0:
-            os.close(fd)
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def read_kv(path: Path) -> dict[str, str]:
@@ -335,10 +448,7 @@ def notify(summary: str, body: str) -> None:
         summary,
         body,
     ]
-    try:
-        subprocess.run(cmd, check=False, capture_output=True, timeout=3)
-    except (OSError, subprocess.TimeoutExpired):
-        return
+    run(cmd, timeout=3)
 
 
 def fetch_latest() -> dict:
