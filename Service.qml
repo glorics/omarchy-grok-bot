@@ -151,7 +151,7 @@ Item {
     _updateError = ""
     updating = true
     actionStatus = "Downloading Linux AppImage…"
-    updateProcess.command = capped(["python3", helperPath(), "--update"])
+    updateProcess.command = capped(["--max-seconds", "330", "python3", helperPath(), "--update"])
     updateProcess.running = true
   }
 

@@ -11,16 +11,21 @@ Does not read Grok Bot tokens, chats, or secret files.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import secrets
 import select
 import shutil
+import signal
+import ssl
 import stat
 import subprocess
 import sys
-import tempfile
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 PLUGIN_REPO = os.environ.get("GROKBOT_PLUGIN_REPO", "glorics/omarchy-grok-bot")
@@ -47,21 +52,19 @@ DARWIN_PROBE = (
     "https://api2.cursor.sh/updates/download/stable/darwin-arm64/"
     "grok-bot-bd824e1890d8b96f"
 )
-LINUX_BY_VERSION = {
-    "0.20.0": (
-        "https://downloads.cursor.com/grokbot/stable/"
-        "ca2c2b6f79b6130a4822d8189711b0f79f9d4661/linux/x64/Grok_Bot_0.20.0.AppImage"
-    ),
-    "0.24.0": (
-        "https://downloads.cursor.com/grokbot/stable/"
-        "302d75da596fc8d11ee0446a19b31c33c6676c2c/linux/x64/Grok_Bot_0.24.0.AppImage"
-    ),
-    "0.30.0": (
-        "https://downloads.cursor.com/grokbot/stable/"
-        "2385d097738b3719cc5ecd9281a107aa106215f1/linux/x64/Grok_Bot_0.30.0.AppImage"
-    ),
+# Only these exact artifacts may be written executable. A newer Cursor
+# build without a digest in this snapshot fails closed.
+PINNED_APPIMAGES = {
+    "0.30.0": {
+        "url": (
+            "https://downloads.cursor.com/grokbot/stable/"
+            "2385d097738b3719cc5ecd9281a107aa106215f1/linux/x64/Grok_Bot_0.30.0.AppImage"
+        ),
+        "sha256": "1adf717784138d8945b248001805a9ae45a77c44aeed2004d81df3a3b2f40bc2",
+        "bytes": 131344546,
+    },
 }
-OFFICIAL_APPIMAGE_URL = LINUX_BY_VERSION["0.30.0"]
+OFFICIAL_APPIMAGE_URL = PINNED_APPIMAGES["0.30.0"]["url"]
 STALE_AFTER_MS = 45_000
 VERSION_RE = re.compile(r"Grok_Bot_(\d+\.\d+\.\d+)")
 MAX_PROC_BYTES = 64 * 1024
@@ -69,11 +72,41 @@ MAX_FILE_BYTES = 64 * 1024
 MAX_HYPR_BYTES = 1024 * 1024
 MAX_STDOUT_BYTES = 256 * 1024
 MAX_FIELD = 96
+MAX_APPIMAGE_BYTES = 200 * 1024 * 1024
+O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+O_CLOEXEC = getattr(os, "O_CLOEXEC", 0)
+CURRENT_NAME = "GrokBot-current.AppImage"
 
 
 def clip(value, n: int = MAX_FIELD) -> str:
     text = str(value or "")
     return text if len(text) <= n else text[:n]
+
+
+def kill_tree(proc: subprocess.Popen) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except OSError:
+        try:
+            proc.send_signal(signal.SIGTERM)
+        except OSError:
+            pass
+    try:
+        proc.wait(timeout=0.2)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except OSError:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    try:
+        proc.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def run(cmd: list[str], timeout: int = 8, max_bytes: int = MAX_PROC_BYTES) -> subprocess.CompletedProcess:
@@ -82,7 +115,10 @@ def run(cmd: list[str], timeout: int = 8, max_bytes: int = MAX_PROC_BYTES) -> su
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
             bufsize=0,
+            start_new_session=True,
+            close_fds=True,
         )
     except OSError as exc:
         return subprocess.CompletedProcess(cmd, 1, "", str(exc))
@@ -100,11 +136,9 @@ def run(cmd: list[str], timeout: int = 8, max_bytes: int = MAX_PROC_BYTES) -> su
         while streams:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                proc.kill()
                 break
             ready, _, _ = select.select(list(streams), [], [], remaining)
             if not ready:
-                proc.kill()
                 break
             stop = False
             for fh in ready:
@@ -125,17 +159,13 @@ def run(cmd: list[str], timeout: int = 8, max_bytes: int = MAX_PROC_BYTES) -> su
                     if room > 0:
                         buf.extend(chunk[:room])
                     overflow = True
-                    proc.kill()
                     stop = True
                     break
                 buf.extend(chunk)
             if stop:
                 break
-        try:
-            proc.wait(timeout=max(0.1, deadline - time.monotonic()))
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=1)
+        if proc.poll() is None:
+            kill_tree(proc)
     finally:
         for fh in (proc.stdout, proc.stderr):
             if fh and not fh.closed:
@@ -162,64 +192,168 @@ def emit(obj: dict) -> None:
     sys.stdout.write(raw)
 
 
-def ensure_private_dir(path: Path) -> bool:
+def _path_parts(path: Path) -> list[str]:
+    raw = os.path.abspath(str(path))
+    parts: list[str] = []
+    for piece in raw.split(os.sep):
+        if piece in ("", "."):
+            continue
+        if piece == "..":
+            if parts:
+                parts.pop()
+            continue
+        if "\x00" in piece:
+            raise OSError("bad path")
+        parts.append(piece)
+    return parts
+
+
+def _basename_ok(name: str) -> bool:
+    return bool(name) and name not in (".", "..") and "/" not in name and "\x00" not in name
+
+
+def open_dir_walk(path: Path, *, create: bool = False, leaf_mode: int | None = 0o700) -> int:
+    """Walk path from / with O_NOFOLLOW. Refuse unsafe entries; never delete them."""
+    parts = _path_parts(path)
+    home_parts = _path_parts(HOME)
+    flags = os.O_RDONLY | os.O_DIRECTORY | O_CLOEXEC
+    nofollow = flags | O_NOFOLLOW
+    fd = os.open("/", flags)
     try:
-        st = path.lstat()
-    except FileNotFoundError:
-        st = None
+        for i, name in enumerate(parts):
+            is_leaf = i == len(parts) - 1
+            under_home = parts[: i + 1][: len(home_parts)] == home_parts and (i + 1) > len(home_parts)
+            try:
+                nxt = os.open(name, nofollow, dir_fd=fd)
+            except FileNotFoundError:
+                if not (create and under_home):
+                    raise
+                if is_leaf and leaf_mode is not None:
+                    mkdir_mode = leaf_mode
+                elif is_leaf:
+                    mkdir_mode = 0o755
+                else:
+                    mkdir_mode = 0o700
+                os.mkdir(name, mkdir_mode, dir_fd=fd)
+                nxt = os.open(name, nofollow, dir_fd=fd)
+            os.close(fd)
+            fd = nxt
+            st = os.fstat(fd)
+            if not stat.S_ISDIR(st.st_mode):
+                raise OSError("not a directory")
+            if is_leaf:
+                if st.st_uid != os.getuid():
+                    raise OSError("not owner")
+                if leaf_mode is not None:
+                    os.fchmod(fd, leaf_mode)
+        return fd
+    except Exception:
+        os.close(fd)
+        raise
+
+
+def ensure_private_dir(path: Path, *, leaf_mode: int | None = 0o700) -> bool:
+    try:
+        fd = open_dir_walk(path, create=True, leaf_mode=leaf_mode)
     except OSError:
         return False
-    if st is not None:
-        if stat.S_ISLNK(st.st_mode):
-            try:
-                path.unlink()
-            except OSError:
-                return False
-        elif not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
-            return False
-    if not path.exists():
-        parent = path.parent
-        if not parent.exists():
-            try:
-                parent.mkdir(parents=True, exist_ok=True)
-            except OSError:
-                return False
-        try:
-            os.mkdir(path, 0o700)
-        except FileExistsError:
-            pass
-        except OSError:
-            return False
-    flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
+    os.close(fd)
+    return True
+
+
+def ensure_state_dir() -> bool:
+    return ensure_private_dir(STATE_DIR, leaf_mode=0o700)
+
+
+def _read_at(dir_fd: int, name: str, max_bytes: int) -> bytes:
+    if not _basename_ok(name):
+        return b""
     try:
-        fd = os.open(str(path), flags)
+        fd = os.open(name, os.O_RDONLY | O_NOFOLLOW | O_CLOEXEC, dir_fd=dir_fd)
     except OSError:
-        return False
+        return b""
     try:
         st = os.fstat(fd)
-        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
-            return False
-        os.fchmod(fd, 0o700)
-        return True
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_size > max_bytes:
+            return b""
+        data = os.read(fd, max_bytes + 1)
+        if len(data) > max_bytes:
+            return b""
+        return data
     finally:
         os.close(fd)
 
 
-def ensure_state_dir() -> bool:
-    return ensure_private_dir(STATE_DIR)
+def _atomic_write_at(dir_fd: int, name: str, data: bytes, max_bytes: int, mode: int = 0o600) -> bool:
+    if not _basename_ok(name) or len(data) > max_bytes:
+        return False
+    try:
+        dest = os.open(name, os.O_RDONLY | O_NOFOLLOW | O_CLOEXEC, dir_fd=dir_fd)
+    except FileNotFoundError:
+        dest = -1
+    except OSError:
+        return False
+    if dest >= 0:
+        try:
+            st = os.fstat(dest)
+            if not stat.S_ISREG(st.st_mode):
+                return False
+        finally:
+            os.close(dest)
+    tmp = ".tmp-" + secrets.token_hex(8)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | O_NOFOLLOW | O_CLOEXEC
+    try:
+        fd = os.open(tmp, flags, 0o600, dir_fd=dir_fd)
+    except OSError:
+        return False
+    try:
+        view = memoryview(data)
+        written = 0
+        while written < len(data):
+            n = os.write(fd, view[written:])
+            if n <= 0:
+                raise OSError("short write")
+            written += n
+        os.fsync(fd)
+        os.fchmod(fd, mode)
+    except OSError:
+        os.close(fd)
+        try:
+            os.unlink(tmp, dir_fd=dir_fd)
+        except OSError:
+            pass
+        return False
+    os.close(fd)
+    try:
+        os.rename(tmp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+        os.fsync(dir_fd)
+        return True
+    except OSError:
+        try:
+            os.unlink(tmp, dir_fd=dir_fd)
+        except OSError:
+            pass
+        return False
 
 
 def read_bounded(path: Path, max_bytes: int) -> bytes:
-    if path.is_symlink():
-        return b""
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    if path.parent == STATE_DIR:
+        try:
+            dir_fd = open_dir_walk(STATE_DIR, create=False, leaf_mode=0o700)
+        except OSError:
+            return b""
+        try:
+            return _read_at(dir_fd, path.name, max_bytes)
+        finally:
+            os.close(dir_fd)
+    flags = os.O_RDONLY | O_NOFOLLOW | O_CLOEXEC
     try:
-        fd = os.open(path, flags)
+        fd = os.open(str(path), flags)
     except OSError:
         return b""
     try:
         st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode) or st.st_size > max_bytes:
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_size > max_bytes:
             return b""
         data = os.read(fd, max_bytes + 1)
         if len(data) > max_bytes:
@@ -230,38 +364,19 @@ def read_bounded(path: Path, max_bytes: int) -> bytes:
 
 
 def atomic_write(path: Path, text: str) -> None:
-    if not ensure_state_dir():
+    if path.parent != STATE_DIR:
         return
     data = text.encode("utf-8")
     if len(data) > MAX_FILE_BYTES:
         return
     try:
-        if path.is_symlink() or (path.exists() and not path.is_file()):
-            path.unlink()
+        dir_fd = open_dir_walk(STATE_DIR, create=True, leaf_mode=0o700)
     except OSError:
         return
-    fd = -1
-    tmp = ""
     try:
-        fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=str(STATE_DIR))
-        os.write(fd, data)
-        os.fsync(fd)
-        os.fchmod(fd, 0o600)
-        os.close(fd)
-        fd = -1
-        os.replace(tmp, path)
-        tmp = ""
-    except OSError:
-        if fd >= 0:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        if tmp:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
+        _atomic_write_at(dir_fd, path.name, data, MAX_FILE_BYTES, 0o600)
+    finally:
+        os.close(dir_fd)
 
 
 def read_kv(path: Path) -> dict[str, str]:
@@ -388,7 +503,7 @@ def curl_headers(url: str, timeout: int = 12) -> str:
         ],
         timeout=timeout + 2,
     )
-    return cap_text(proc.stdout or "", MAX_PROC_BYTES)
+    return clip(proc.stdout or "", MAX_PROC_BYTES)
 
 
 def head_ok(url: str) -> bool:
@@ -411,10 +526,16 @@ def head_ok(url: str) -> bool:
     return proc.stdout.strip() == "200"
 
 
+def pinned_artifact(version: str) -> dict:
+    pin = PINNED_APPIMAGES.get(strip_v(version) or "")
+    return pin if isinstance(pin, dict) else {}
+
+
 def linux_url_for(version: str) -> str:
-    known = LINUX_BY_VERSION.get(version, "")
-    if known and head_ok(known):
-        return known
+    pin = pinned_artifact(version)
+    url = str(pin.get("url") or "")
+    if url and head_ok(url):
+        return url
     return ""
 
 
@@ -483,18 +604,128 @@ def fetch_latest() -> dict:
     return data
 
 
-def is_elf(path: Path) -> bool:
+def _replace_current_symlink(dir_fd: int, target_name: str) -> bool:
+    if not _basename_ok(target_name):
+        return False
     try:
-        with path.open("rb") as fh:
-            return fh.read(4) == b"\x7fELF"
+        st = os.lstat(CURRENT_NAME, dir_fd=dir_fd)
+    except FileNotFoundError:
+        os.symlink(target_name, CURRENT_NAME, dir_fd=dir_fd)
+        os.fsync(dir_fd)
+        return True
     except OSError:
+        return False
+    if not stat.S_ISLNK(st.st_mode):
+        return False
+    try:
+        existing = os.readlink(CURRENT_NAME, dir_fd=dir_fd)
+    except OSError:
+        return False
+    if existing != os.path.basename(existing):
+        return False
+    try:
+        os.unlink(CURRENT_NAME, dir_fd=dir_fd)
+        os.symlink(target_name, CURRENT_NAME, dir_fd=dir_fd)
+        os.fsync(dir_fd)
+        return True
+    except OSError:
+        return False
+
+
+def _fd_sha256_and_elf(fd: int, expected_bytes: int) -> tuple[str, bool]:
+    digest = hashlib.sha256()
+    os.lseek(fd, 0, os.SEEK_SET)
+    total = 0
+    magic = b""
+    while True:
+        chunk = os.read(fd, 1024 * 64)
+        if not chunk:
+            break
+        if total == 0:
+            magic = chunk[:4]
+        total += len(chunk)
+        if total > expected_bytes:
+            return "", False
+        digest.update(chunk)
+    if total != expected_bytes:
+        return "", False
+    return digest.hexdigest(), magic == b"\x7fELF"
+
+
+def _download_pinned(dir_fd: int, tmp_name: str, pin: dict, timeout: int = 300) -> bool:
+    url = str(pin.get("url") or "")
+    expected = int(pin.get("bytes") or 0)
+    want = str(pin.get("sha256") or "")
+    if not url.startswith("https://downloads.cursor.com/grokbot/stable/") or expected < 1 or len(want) != 64:
+        return False
+    if expected > MAX_APPIMAGE_BYTES:
+        return False
+    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | O_NOFOLLOW | O_CLOEXEC
+    try:
+        fd = os.open(tmp_name, flags, 0o600, dir_fd=dir_fd)
+    except OSError:
+        return False
+    ctx = ssl.create_default_context()
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+
+    opener = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ctx))
+    digest = hashlib.sha256()
+    total = 0
+    deadline = time.monotonic() + timeout
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            if getattr(resp, "geturl", lambda: url)() != url:
+                raise OSError("redirect")
+            length = resp.headers.get("Content-Length")
+            if length is not None:
+                try:
+                    if int(length) != expected:
+                        raise ValueError("size")
+                except ValueError:
+                    raise OSError("bad length")
+            while True:
+                if time.monotonic() > deadline:
+                    raise TimeoutError
+                chunk = resp.read(1024 * 64)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > expected:
+                    raise OSError("too large")
+                digest.update(chunk)
+                os.write(fd, chunk)
+        if total != expected or digest.hexdigest() != want:
+            raise OSError("digest")
+        os.fsync(fd)
+        got, elf = _fd_sha256_and_elf(fd, expected)
+        if got != want or not elf:
+            raise OSError("verify")
+        os.fchmod(fd, 0o755)
+        os.fsync(fd)
+        os.close(fd)
+        fd = -1
+        return True
+    except (OSError, TimeoutError, urllib.error.URLError, ssl.SSLError, ValueError):
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        try:
+            os.unlink(tmp_name, dir_fd=dir_fd)
+        except OSError:
+            pass
         return False
 
 
 def do_update() -> int:
     cache = fetch_latest()
     latest = strip_v(str(cache.get("tag") or ""))
-    linux = str(cache.get("linuxUrl") or "")
+    pin = pinned_artifact(latest)
     state = read_kv(STATE_FILE)
     installed = strip_v(state.get("tag") or "")
     if not latest:
@@ -503,58 +734,51 @@ def do_update() -> int:
     if installed and not version_newer(latest, installed):
         print(f"Up to date · {installed}")
         return 0
-    if not linux:
+    if not pin:
         print(
-            f"Newer Grok Bot {latest} is out, but no Linux AppImage is on the CDN yet",
+            f"Newer Grok Bot {latest} is out, but this plugin snapshot has no pinned digest",
             file=sys.stderr,
         )
         return 2
-    APPS.mkdir(parents=True, exist_ok=True)
     name = f"Grok_Bot_{latest}.AppImage"
-    dest = APPS / name
-    partial = APPS / f"{name}.partial"
+    if not _basename_ok(name):
+        print("Bad AppImage name", file=sys.stderr)
+        return 1
     try:
-        proc = subprocess.run(
-            [
-                "curl",
-                "-fL",
-                "-A",
-                "Mozilla/5.0",
-                "--retry",
-                "2",
-                "--max-time",
-                "300",
-                "-o",
-                str(partial),
-                linux,
-            ],
-            check=False,
-            timeout=320,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        partial.unlink(missing_ok=True)
-        print("Download failed", file=sys.stderr)
+        dir_fd = open_dir_walk(APPS, create=True, leaf_mode=None)
+    except OSError:
+        print("Could not open ~/Applications", file=sys.stderr)
         return 1
-    if proc.returncode != 0 or not partial.exists() or not is_elf(partial):
-        partial.unlink(missing_ok=True)
-        print("Download was not an AppImage", file=sys.stderr)
-        return 1
-    partial.chmod(0o755)
-    dest.unlink(missing_ok=True)
-    partial.rename(dest)
-    current = APPS / "GrokBot-current.AppImage"
-    if current.exists() or current.is_symlink():
-        current.unlink()
-    current.symlink_to(name)
+    tmp = ".partial-" + secrets.token_hex(8)
+    try:
+        if not _download_pinned(dir_fd, tmp, pin):
+            print("Download failed digest or size check", file=sys.stderr)
+            return 1
+        try:
+            os.rename(tmp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+            os.fsync(dir_fd)
+        except OSError:
+            try:
+                os.unlink(tmp, dir_fd=dir_fd)
+            except OSError:
+                pass
+            print("Could not install AppImage", file=sys.stderr)
+            return 1
+        if not _replace_current_symlink(dir_fd, name):
+            print("Installed AppImage, but current symlink was unsafe", file=sys.stderr)
+            return 1
+    finally:
+        os.close(dir_fd)
     atomic_write(
         STATE_FILE,
         "\n".join(
             [
                 f"tag={latest}",
                 f"name={name}",
-                f"path={current}",
+                f"path={APPS / CURRENT_NAME}",
                 "source=official-cursor-cdn",
-                f"url={linux}",
+                f"url={pin['url']}",
+                f"sha256={pin['sha256']}",
                 "",
             ]
         )
@@ -646,7 +870,7 @@ def status() -> dict:
 
     signed_in = any(path.exists() for path in SESSION_HINTS)
     update_available = bool(latest and version and version_newer(latest, version))
-    can_update = bool(update_available and linux_latest)
+    can_update = bool(update_available and pinned_artifact(latest) and linux_latest)
 
     return {
         "ok": True,

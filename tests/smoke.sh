@@ -16,12 +16,24 @@ test "$capped" -le 65536
 test "$got" -gt 65536
 echo "run-capped ok · $capped bytes (limit 65536)"
 
+start=$(date +%s)
+set +o pipefail
+GLORICS_MAX_SECONDS=1 bash "$root/bin/run-capped" python3 -c 'import time; time.sleep(20)' >/dev/null 2>&1 || true
+set -o pipefail
+elapsed=$(( $(date +%s) - start ))
+test "$elapsed" -lt 5
+echo "run-capped deadline ok · ${elapsed}s"
+
 if grep -n 'capture_output=True' "$root/status.py"; then
   echo "status.py still uses capture_output=True" >&2
   exit 1
 fi
+if grep -nE 'LINUX_BY_VERSION|partial\.chmod|APPS\.mkdir' "$root/status.py"; then
+  echo "status.py still has the old installer" >&2
+  exit 1
+fi
 python3 - "$root" <<'PY'
-import os, stat, sys, tempfile
+import os, stat, sys, tempfile, time
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 import status as grok
@@ -31,6 +43,14 @@ assert len(proc.stdout.encode()) <= 4096, len(proc.stdout)
 assert proc.returncode != 0
 print("producer cap ok · %d bytes rc=%s" % (len(proc.stdout), proc.returncode))
 
+survived = Path(tempfile.mkdtemp()) / "survived"
+script = "import subprocess, sys, time\nsubprocess.Popen(['sleep', '20'])\ntime.sleep(20)\nopen(sys.argv[1],'w').write('alive')\n"
+start = time.monotonic()
+proc = grok.run(["python3", "-c", script, str(survived)], timeout=1)
+assert time.monotonic() - start < 3
+assert not survived.exists()
+print("process group reap ok · rc=%s" % proc.returncode)
+
 base = Path(tempfile.mkdtemp())
 secret = base / "secret"
 secret.mkdir()
@@ -39,11 +59,17 @@ marker.write_text("keep")
 os.chmod(secret, 0o755)
 planted = base / "state"
 planted.symlink_to(secret)
-assert grok.ensure_private_dir(planted)
-assert planted.is_dir() and not planted.is_symlink()
+assert grok.ensure_private_dir(planted) is False
+assert planted.is_symlink()
 assert marker.read_text() == "keep"
 assert stat.S_IMODE(secret.stat().st_mode) == 0o755
-print("state dir ok · symlink not followed")
+print("state dir ok · planted symlink refused")
+
+pin = grok.PINNED_APPIMAGES["0.30.0"]
+assert pin["sha256"] == "1adf717784138d8945b248001805a9ae45a77c44aeed2004d81df3a3b2f40bc2"
+assert pin["bytes"] == 131344546
+assert grok.pinned_artifact("0.99.0") == {}
+print("pinned digest ok · 0.30.0")
 PY
 
 if command -v omarchy >/dev/null; then
